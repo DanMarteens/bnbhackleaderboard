@@ -27,6 +27,7 @@ FREE_RPC = os.environ.get("FREE_RPC", "https://bsc-dataseed.binance.org/")
 COMP = "0x212c61b9b72c95d95bf29cf032f5e5635629aed5".lower()
 USDT = "0x55d398326f99059fF775485246999027B3197955"
 TOPIC_REG = "0x" + keccak(b"Registered(address)").hex()
+TOPIC_TRANSFER = "0x" + keccak(b"Transfer(address,address,uint256)").hex()
 SEL_BAL = "0x70a08231"            # balanceOf(address)
 SEL_DEC = "0x313ce567"            # decimals()
 PART_F = os.path.join(ROOT, "dashboard", "participants.json")
@@ -34,7 +35,10 @@ BASE_F = os.path.join(ROOT, "dashboard", "lb_baseline.json")
 DEC_F = os.path.join(ROOT, "dashboard", "lb_decimals.json")
 OUT_F = os.path.join(ROOT, "dashboard", "leaderboard.json")
 HIST_F = os.path.join(ROOT, "dashboard", "history.json")
+GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} captured at baseline
+FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
 MAXHIST = 400          # ~8 days at 30-min cadence
+MINCAP = 5.0           # ignore returns on < $5 capital (dust / noise)
 DQ = 0.30              # disqualification drawdown line
 
 
@@ -220,6 +224,99 @@ def value_agents(agents, tokens, prices, decimals):
     return vals, holds
 
 
+def external_flows(agents, from_block, tokens, prices, decimals):
+    """Net external BEP-20 deposit (USD) per agent since `from_block`.
+
+    A deposit is an INBOUND token Transfer whose sender is an EOA; a withdrawal is an
+    OUTBOUND transfer to an EOA. Transfers to/from *contracts* (DEX routers, pairs,
+    aggregators) are trades, not capital flows -> ignored. This lets the leaderboard
+    rank by trading-only return: PnL is measured against (baseline + net deposits), so
+    topping the wallet up grows the capital base instead of the return.
+
+    getLogs-based (NodeReal's transfer indexer returns empty on BSC). Fully fail-safe:
+    falls back to the cached flows (or zeros) on any error -> never breaks a run."""
+    flows = {a: 0.0 for a in agents}
+    if not RPC or not agents:
+        return flows
+    try:
+        latest = int(rpc("eth_blockNumber", []), 16)
+        if from_block >= latest:
+            return flows
+        addr_sym = {a.lower(): s for s, a in tokens.items()}
+        token_addrs = list({a for a in tokens.values()})
+        agent_set = set(a.lower() for a in agents)
+        agent_topics = ["0x" + "0" * 24 + a[2:] for a in agents]
+
+        def grab(b, e, topics, depth=0):
+            for _ in range(3):
+                g = _post({"jsonrpc": "2.0", "id": 1, "method": "eth_getLogs", "params": [{
+                    "address": token_addrs, "fromBlock": hex(b), "toBlock": hex(e),
+                    "topics": topics}]})
+                if "error" not in g:
+                    return g["result"]
+                time.sleep(1.0)
+            if b < e and depth < 12:
+                mid = (b + e) // 2
+                return grab(b, mid, topics, depth + 1) + grab(mid + 1, e, topics, depth + 1)
+            return []
+
+        logs, b, step = [], from_block, 45000
+        while b <= latest:
+            e = min(b + step, latest)
+            logs += grab(b, e, [TOPIC_TRANSFER, None, agent_topics])    # inbound (to = agent)
+            logs += grab(b, e, [TOPIC_TRANSFER, agent_topics, None])    # outbound (from = agent)
+            b = e + 1
+            time.sleep(0.1)
+
+        # classify each non-agent counterparty as EOA (code == 0x) vs contract
+        cps = set()
+        for l in logs:
+            if len(l.get("topics", [])) < 3:
+                continue
+            frm, to = "0x" + l["topics"][1][-40:], "0x" + l["topics"][2][-40:]
+            cps.add(to if frm in agent_set else frm)
+        cps = list(cps)
+        is_eoa = {}
+        codes = rpc_batch([("eth_getCode", [c, "latest"]) for c in cps]) if cps else []
+        for c, r in zip(cps, codes):
+            is_eoa[c] = r in (None, "0x", "0x0", "")
+
+        seen = set()
+        for l in logs:
+            ident = (l.get("transactionHash"), l.get("logIndex"))
+            if ident in seen:                      # dedup (a self-transfer hits both queries)
+                continue
+            seen.add(ident)
+            if len(l.get("topics", [])) < 3:
+                continue
+            sym = addr_sym.get(l.get("address", "").lower())
+            price = float(prices.get(sym, 0) or 0) if sym else 0
+            if price <= 0:
+                continue
+            try:
+                amt = int(l["data"], 16) / (10 ** decimals.get(sym, 18))
+            except Exception:
+                continue
+            usd = amt * price
+            if usd <= 0:
+                continue
+            frm, to = "0x" + l["topics"][1][-40:], "0x" + l["topics"][2][-40:]
+            if to in agent_set and frm not in agent_set and is_eoa.get(frm):
+                flows[to] = flows.get(to, 0.0) + usd          # deposit in
+            elif frm in agent_set and to not in agent_set and is_eoa.get(to):
+                flows[frm] = flows.get(frm, 0.0) - usd        # withdrawal out
+        flows = {a: round(flows.get(a, 0.0), 2) for a in agents}
+        json.dump(flows, open(FLOWS_F, "w"))
+        return flows
+    except Exception as ex:
+        print("flow calc failed (using cache/zero):", ex)
+        try:
+            cached = json.load(open(FLOWS_F))
+            return {a: float(cached.get(a, 0.0)) for a in agents}
+        except Exception:
+            return {a: 0.0 for a in agents}
+
+
 def main():
     do_baseline = "--baseline" in sys.argv
     # Re-enumerate (archive RPC) only on request or first run; otherwise load the saved
@@ -245,23 +342,40 @@ def main():
 
     if do_baseline:
         json.dump(vals, open(BASE_F, "w")); baseline = vals
+        try:                       # remember the go-live block -> deposit scan starts here
+            json.dump({"block": int(rpc("eth_blockNumber", []), 16), "ts": now},
+                      open(GOLIVE_F, "w"))
+        except Exception:
+            pass
     else:
         try:
             baseline = json.load(open(BASE_F))
         except Exception:
             baseline = {}
 
+    # ---- net external deposits since go-live (capital base for trading-only return) ----
+    flows = {a: 0.0 for a in agents}
+    try:
+        gl = json.load(open(GOLIVE_F)).get("block")
+    except Exception:
+        gl = None
+    if gl and not do_baseline:     # no post-go-live flow can exist on the baseline run
+        flows = external_flows(agents, gl, tokens, prices, decimals)
+
     # ---- history time-series (append + cap) -> enables sparklines/24h/drawdown ----
     try:
         hist = json.load(open(HIST_F))
     except Exception:
         hist = []
-    hist.append({"ts": now, "v": {a: vals.get(a, 0.0) for a in agents}})
+    hist.append({"ts": now, "v": {a: vals.get(a, 0.0) for a in agents},
+                 "f": {a: flows.get(a, 0.0) for a in agents}})
     hist = hist[-MAXHIST:]
     json.dump(hist, open(HIST_F, "w"))
 
-    def series(a):
-        return [(h["ts"], h["v"].get(a, 0.0)) for h in hist]
+    def series(a):                 # deposit-adjusted value series (raw value minus cumulative
+        # net deposits at each snapshot) -> every window is deposit-neutral. Old snapshots
+        # without an "f" field predate the event, where flow is 0 anyway.
+        return [(h["ts"], h["v"].get(a, 0.0) - h.get("f", {}).get(a, 0.0)) for h in hist]
 
     def chg24h(s):
         if len(s) < 2:
@@ -292,11 +406,13 @@ def main():
         st = _dt.datetime(2026, 6, 21 + n, tzinfo=_dt.timezone.utc).timestamp()
         return int(st), int(st + 86400)
 
-    def winret(s, secs):           # return over a rolling window
+    def winret(s, secs):           # return over a rolling window (deposit-adjusted series)
         if len(s) < 2:
             return None
         past = next((v for t, v in s if t >= now - secs), s[0][1])
-        return round((s[-1][1] / past - 1) * 100, 2) if past else None
+        if not past or past < MINCAP:
+            return None
+        return round((s[-1][1] / past - 1) * 100, 2)
 
     def _at_or_before(s, ts):      # last snapshot value with t <= ts (s ascending)
         val = None
@@ -312,9 +428,9 @@ def main():
         if now < st:               # day hasn't started yet
             return None
         prev = base if n == 1 else _at_or_before(s, st)   # Day 1 opens at go-live baseline
-        if not prev or prev <= 0:
+        if not prev or prev < MINCAP:
             prev = next((v for t, v in s if t >= st), None)
-        if not prev or prev <= 0:
+        if not prev or prev < MINCAP:
             return None
         cur = s[-1][1] if now < en else _at_or_before(s, en)   # in-progress -> current
         if not cur:
@@ -323,12 +439,13 @@ def main():
 
     rows = []
     for a in agents:
-        s = series(a); v = vals.get(a, 0.0); b = baseline.get(a)
-        allret = round((v / b - 1) * 100, 2) if (b and b > 0) else None
+        s = series(a); v = vals.get(a, 0.0); b = baseline.get(a) or 0.0; f = flows.get(a, 0.0)
+        cap = b + f                              # total capital deployed = start + net deposits
+        allret = round((v - cap) / cap * 100, 2) if cap > MINCAP else None
         win = {"1h": winret(s, 3600), "24h": winret(s, 86400), "all": allret}
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, b)
-        rows.append({"agent": a, "value": v,
+        rows.append({"agent": a, "value": v, "dep": round(f, 2),
                      "ret_pct": allret, "chg24h": winret(s, 86400),
                      "dd_pct": drawdown(s), "spark": spark(s), "holds": holds.get(a, []),
                      "win": win})

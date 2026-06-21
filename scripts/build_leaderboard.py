@@ -89,6 +89,7 @@ background:
 .n{font:700 14px/1 var(--mono);color:var(--mut);text-align:center}
 .r1 .n{color:var(--gold)}.r2 .n{color:#d4d8df}.r3 .n{color:#e08a3c}.r4 .n,.r5 .n{color:var(--gold2)}
 .prize{font:700 9px/1 var(--mono);background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0a0a0a;border-radius:5px;padding:3px 6px;margin-left:7px;letter-spacing:.04em;flex:none}
+.dep{font:600 9px/1 var(--mono);background:rgba(91,140,255,.16);color:#9db4ff;border:1px solid rgba(91,140,255,.3);border-radius:5px;padding:3px 6px;margin-left:7px;letter-spacing:.03em;flex:none}
 .ag{display:flex;align-items:center;gap:10px;min-width:0}
 .dot{width:22px;height:22px;border-radius:50%;flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
 .adr{font:500 12.5px/1 var(--mono);overflow:hidden;text-overflow:ellipsis}
@@ -143,6 +144,7 @@ background:
 </div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
 <div class="foot">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
+  PnL is deposit-adjusted: return = (value − net deposits) ÷ (start capital + net deposits), so topping up a wallet can't inflate the rank.<br>
   Updated <span id="upd"></span> · refreshes every ~30 min · not affiliated with organizers.
   <div class="by">built by <b><a href="https://x.com/itsabigdill" target="_blank" rel="noopener">@itsabigdill</a></b>
    · <a href="https://github.com/DanMarteens" target="_blank" rel="noopener">github</a>
@@ -194,6 +196,7 @@ function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>
   <div class="n">${r._rk}</div>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
    ${WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
+   ${r.dep>1?`<span class="dep" title="external deposits since go-live — excluded from PnL">+$${r.dep>=1000?Math.round(r.dep).toLocaleString():Math.round(r.dep)} dep</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="spk">${spark(r.spark)}</div><div class="vv">${fmt(r.value)}</div><div class="vv">${pct(winv(r))}</div>
   <div class="vv c24">${pct(r.win?r.win['24h']:r.chg24h)}</div><div class="dqcol">${dq(r.dd_pct||0)}</div></div>
