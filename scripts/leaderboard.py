@@ -33,6 +33,9 @@ PART_F = os.path.join(ROOT, "dashboard", "participants.json")
 BASE_F = os.path.join(ROOT, "dashboard", "lb_baseline.json")
 DEC_F = os.path.join(ROOT, "dashboard", "lb_decimals.json")
 OUT_F = os.path.join(ROOT, "dashboard", "leaderboard.json")
+HIST_F = os.path.join(ROOT, "dashboard", "history.json")
+MAXHIST = 400          # ~8 days at 30-min cadence
+DQ = 0.30              # disqualification drawdown line
 
 
 def _post(payload, url=None):
@@ -218,32 +221,79 @@ def main():
     tokens, prices, decimals = load_tokens()
     vals = value_agents(agents, tokens, prices, decimals)
 
-    baseline = {}
+    now = int(time.time())
+
     if do_baseline:
-        json.dump(vals, open(BASE_F, "w"))
-        baseline = vals
+        json.dump(vals, open(BASE_F, "w")); baseline = vals
     else:
         try:
             baseline = json.load(open(BASE_F))
         except Exception:
             baseline = {}
 
+    # ---- history time-series (append + cap) -> enables sparklines/24h/drawdown ----
+    try:
+        hist = json.load(open(HIST_F))
+    except Exception:
+        hist = []
+    hist.append({"ts": now, "v": {a: vals.get(a, 0.0) for a in agents}})
+    hist = hist[-MAXHIST:]
+    json.dump(hist, open(HIST_F, "w"))
+
+    def series(a):
+        return [(h["ts"], h["v"].get(a, 0.0)) for h in hist]
+
+    def chg24h(s):
+        if len(s) < 2:
+            return None
+        cutoff = now - 86400
+        past = next((v for t, v in s if t >= cutoff), s[0][1])
+        cur = s[-1][1]
+        return round((cur / past - 1) * 100, 2) if past else None
+
+    def drawdown(s):
+        peak = dd = 0.0
+        for _, v in s:
+            peak = max(peak, v)
+            if peak > 0:
+                dd = max(dd, (peak - v) / peak)
+        return round(dd * 100, 2)
+
+    def spark(s, k=24):
+        vs = [v for _, v in s]
+        if len(vs) <= k:
+            return [round(v, 4) for v in vs]
+        step = len(vs) / k
+        return [round(vs[min(len(vs) - 1, int(i * step))], 4) for i in range(k)]
+
     rows = []
-    for ag in agents:
-        v = vals.get(ag, 0.0)
-        b = baseline.get(ag)
-        ret = round((v / b - 1) * 100, 2) if (b and b > 0) else None
-        rows.append({"agent": ag, "value": v, "ret_pct": ret})
+    for a in agents:
+        s = series(a); v = vals.get(a, 0.0); b = baseline.get(a)
+        rows.append({"agent": a, "value": v,
+                     "ret_pct": round((v / b - 1) * 100, 2) if (b and b > 0) else None,
+                     "chg24h": chg24h(s), "dd_pct": drawdown(s), "spark": spark(s)})
     rows.sort(key=lambda r: (r["ret_pct"] if r["ret_pct"] is not None else -1e9, r["value"]), reverse=True)
     for i, r in enumerate(rows):
         r["rank"] = i + 1
-    out = {"generated_ts": int(time.time()), "n": len(agents),
-           "has_baseline": bool(baseline), "rows": rows}
+
+    has_base = bool(baseline)
+    rets = [r["ret_pct"] for r in rows if r["ret_pct"] is not None]
+    stats = {
+        "n": len(agents),
+        "funded": sum(1 for r in rows if r["value"] > 0),
+        "deployed": round(sum(r["value"] for r in rows), 2),
+        "in_profit": (sum(1 for r in rows if (r["ret_pct"] or 0) > 0) if has_base else None),
+        "avg_ret": (round(sum(rets) / len(rets), 2) if rets else None),
+        "survivors": (sum(1 for r in rows if r["dd_pct"] < DQ * 100) if has_base else None),
+        "dq_pct": DQ * 100,
+    }
+    out = {"generated_ts": now, "n": len(agents), "has_baseline": has_base,
+           "stats": stats, "rows": rows}
     json.dump(out, open(OUT_F, "w"))
 
-    print(f"participants: {len(agents)} | baseline: {'yes' if baseline else 'no'}")
-    for r in rows[:10]:
-        print(f"  #{r['rank']:>2} {r['agent']}  ${r['value']:>8}  ret={r['ret_pct']}")
+    print(f"participants {len(agents)} | baseline {has_base} | funded {stats['funded']} | deployed ${stats['deployed']}")
+    for r in rows[:8]:
+        print(f"  #{r['rank']:>2} {r['agent']} ${r['value']} ret={r['ret_pct']} 24h={r['chg24h']} dd={r['dd_pct']}")
 
 
 if __name__ == "__main__":

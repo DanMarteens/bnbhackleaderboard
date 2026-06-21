@@ -29,14 +29,16 @@ jobs:
           if [ ! -f dashboard/lb_baseline.json ] && [ "$NOW" -ge "$GO_LIVE" ]; then
             echo "Competition open + no baseline yet -> snapshotting go-live baseline"
             python scripts/leaderboard.py --baseline
-            git config user.name "leaderboard-bot"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add dashboard/lb_baseline.json
-            git commit -m "go-live baseline [skip ci]" || true
-            git push || true
           else
             python scripts/leaderboard.py
           fi
+      - name: Persist history + baseline
+        run: |
+          git config user.name "leaderboard-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dashboard/history.json dashboard/lb_baseline.json 2>/dev/null || true
+          git commit -m "snapshot [skip ci]" || true
+          git push || true
       - name: Build page
         run: python scripts/build_leaderboard.py dashboard/leaderboard.json public/index.html
       - uses: actions/upload-pages-artifact@v3
