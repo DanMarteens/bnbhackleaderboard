@@ -1,0 +1,877 @@
+{
+  "ETH": {
+    "address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+    "decimals": 18,
+    "priceUsd": 1683.2693914120734,
+    "ambiguous": false,
+    "stable": false
+  },
+  "USDT": {
+    "address": "0x55d398326f99059fF775485246999027B3197955",
+    "decimals": 18,
+    "priceUsd": 0.9987512843952018,
+    "ambiguous": false,
+    "stable": true
+  },
+  "USDC": {
+    "address": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+    "decimals": 18,
+    "priceUsd": 0.9996295117489266,
+    "ambiguous": false,
+    "stable": true
+  },
+  "XRP": {
+    "address": "0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE",
+    "decimals": 18,
+    "priceUsd": 1.1423308336910205,
+    "ambiguous": false,
+    "stable": false
+  },
+  "TRX": {
+    "address": "0xCE7de646e7208a4Ef112cb6ed5038FA6cC6b12e3",
+    "decimals": 6,
+    "priceUsd": 0.31745006489131977,
+    "ambiguous": false,
+    "stable": false
+  },
+  "DOGE": {
+    "address": "0xbA2aE424d960c26247Dd6c32edC70B295c744C43",
+    "decimals": 8,
+    "priceUsd": 0.08220873024587208,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ZEC": {
+    "address": "0x1Ba42e5193dfA8B03D15dd1B86a3113bbBEF8Eeb",
+    "decimals": 18,
+    "priceUsd": 448.70921710933607,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ADA": {
+    "address": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
+    "decimals": 18,
+    "priceUsd": 0.16018718994415526,
+    "ambiguous": false,
+    "stable": false
+  },
+  "LINK": {
+    "address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+    "decimals": 18,
+    "priceUsd": 7.8093247250832265,
+    "ambiguous": false,
+    "stable": false
+  },
+  "BCH": {
+    "address": "0x8fF795a6F4D97E7887C79beA79aba5cc76444aDf",
+    "decimals": 18,
+    "priceUsd": 195.2956841983393,
+    "ambiguous": false,
+    "stable": false
+  },
+  "DAI": {
+    "address": "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3",
+    "decimals": 18,
+    "priceUsd": 0.9987862437147949,
+    "ambiguous": false,
+    "stable": true
+  },
+  "M": {
+    "address": "0x22b1458e780F8fA71E2F84502cEe8B5A3cc731Fa",
+    "decimals": 18,
+    "priceUsd": 2.897529451679018,
+    "ambiguous": false,
+    "stable": false
+  },
+  "LTC": {
+    "address": "0x4338665CBB7B2485A8855A139b75D5e34AB0DB94",
+    "decimals": 18,
+    "priceUsd": 43.10136873085214,
+    "ambiguous": false,
+    "stable": false
+  },
+  "AVAX": {
+    "address": "0x1CE0c2827e2eF14D5C4f29a091d735A204794041",
+    "decimals": 18,
+    "priceUsd": 6.315389236547263,
+    "ambiguous": true,
+    "stable": false
+  },
+  "XAUt": {
+    "address": "0x21cAef8A43163Eea865baeE23b9C2E327696A3bf",
+    "decimals": 6,
+    "priceUsd": 4202.962688712849,
+    "ambiguous": false,
+    "stable": false
+  },
+  "WLFI": {
+    "address": "0x47474747477b199288bF72a1D702f7Fe0Fb1DEeA",
+    "decimals": 18,
+    "priceUsd": 0.05894881501120849,
+    "ambiguous": false,
+    "stable": false
+  },
+  "DOT": {
+    "address": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",
+    "decimals": 18,
+    "priceUsd": 0.9505275979129897,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ASTER": {
+    "address": "0x000Ae314E2A2172a039B26378814C252734f556A",
+    "decimals": 18,
+    "priceUsd": 0.6351661295570327,
+    "ambiguous": false,
+    "stable": false
+  },
+  "DEXE": {
+    "address": "0x6E88056E8376Ae7709496Ba64d37fa2f8015ce3e",
+    "decimals": 18,
+    "priceUsd": 15.286838665278133,
+    "ambiguous": true,
+    "stable": false
+  },
+  "USDD": {
+    "address": "0x45E51bc23D592EB2DBA86da3985299f7895d66Ba",
+    "decimals": 18,
+    "priceUsd": 0.998598015599575,
+    "ambiguous": false,
+    "stable": true
+  },
+  "ETC": {
+    "address": "0x3d6545b08693daE087E957cb1180ee38B9e3c25E",
+    "decimals": 18,
+    "priceUsd": 7.013234887311356,
+    "ambiguous": false,
+    "stable": false
+  },
+  "AAVE": {
+    "address": "0xfb6115445Bff7b52FeB98650C87f44907E58f802",
+    "decimals": 18,
+    "priceUsd": 71.54984019380247,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ATOM": {
+    "address": "0x0Eb3a705fc54725037CC9e008bDede697f62F335",
+    "decimals": 18,
+    "priceUsd": 1.7964186381307043,
+    "ambiguous": false,
+    "stable": false
+  },
+  "U": {
+    "address": "0xcE24439F2D9C6a2289F741120FE202248B666666",
+    "decimals": 18,
+    "priceUsd": 0.9973046052318638,
+    "ambiguous": false,
+    "stable": false
+  },
+  "FIL": {
+    "address": "0x0D8Ce2A99Bb6e3B7Db580eD848240e4a0F9aE153",
+    "decimals": 18,
+    "priceUsd": 0.7662671804680742,
+    "ambiguous": false,
+    "stable": false
+  },
+  "INJ": {
+    "address": "0xa2B726B1145A4773F68593CF171187d8EBe4d495",
+    "decimals": 18,
+    "priceUsd": 5.093286635496682,
+    "ambiguous": false,
+    "stable": false
+  },
+  "\u5e01\u5b89\u4eba\u751f": {
+    "address": "0x924fa68a0FC644485b8df8AbfA0A41C2e7744444",
+    "decimals": 18,
+    "priceUsd": 0.7038267795949226,
+    "ambiguous": true,
+    "stable": false
+  },
+  "NIGHT": {
+    "address": "0xFe930c2d63AeD9b82fC4DBC801920dD2c1a3224F",
+    "decimals": 18,
+    "priceUsd": 0.029475928052089984,
+    "ambiguous": false,
+    "stable": false
+  },
+  "FET": {
+    "address": "0x031b41e504677879370e9DBcF937283A8691Fa7f",
+    "decimals": 18,
+    "priceUsd": 0.19191676671322289,
+    "ambiguous": false,
+    "stable": false
+  },
+  "TUSD": {
+    "address": "0x40af3827F39D0EAcBF4A168f8D4ee67c121D11c9",
+    "decimals": 18,
+    "priceUsd": 0.9976972697402215,
+    "ambiguous": false,
+    "stable": true
+  },
+  "PENGU": {
+    "address": "0x6418c0dd099a9FDA397C766304CDd918233E8847",
+    "decimals": 18,
+    "priceUsd": 0.006616662978927204,
+    "ambiguous": false,
+    "stable": false
+  },
+  "CAKE": {
+    "address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+    "decimals": 18,
+    "priceUsd": 1.3183515976221114,
+    "ambiguous": false,
+    "stable": false
+  },
+  "SIREN": {
+    "address": "0x997A58129890bBdA032231A52eD1ddC845fc18e1",
+    "decimals": 18,
+    "priceUsd": 0.04514677513737588,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ZRO": {
+    "address": "0x6985884C4392D348587B19cb9eAAf157F13271cd",
+    "decimals": 18,
+    "priceUsd": 0.9742474853001236,
+    "ambiguous": false,
+    "stable": false
+  },
+  "KITE": {
+    "address": "0x904567252D8F48555b7447c67dCA23F0372E16be",
+    "decimals": 18,
+    "priceUsd": 0.18313160393787753,
+    "ambiguous": false,
+    "stable": false
+  },
+  "FDUSD": {
+    "address": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+    "decimals": 18,
+    "priceUsd": 0.9971887415697713,
+    "ambiguous": false,
+    "stable": true
+  },
+  "BEAT": {
+    "address": "0xcf3232B85b43BCa90E51D38cc06Cc8bB8C8A3E36",
+    "decimals": 18,
+    "priceUsd": 1.6868252981448326,
+    "ambiguous": false,
+    "stable": false
+  },
+  "PIEVERSE": {
+    "address": "0x0E63B9C287E32A05E6b9AB8ee8dF88A2760225A9",
+    "decimals": 18,
+    "priceUsd": 0.6677996037169214,
+    "ambiguous": false,
+    "stable": false
+  },
+  "BTT": {
+    "address": "0x97eCc27f79Eaa69f80Ab49bc97Ba3750A7087CCC",
+    "decimals": 18,
+    "priceUsd": 0.3113060862427929,
+    "ambiguous": false,
+    "stable": false
+  },
+  "EDGE": {
+    "address": "0x70f2EADf1CA1969FF42b0c78e9DA519e8937cbaF",
+    "decimals": 18,
+    "priceUsd": 0.34316855094604815,
+    "ambiguous": false,
+    "stable": false
+  },
+  "LDO": {
+    "address": "0x986854779804799C1d68867F5E03e601E781e41b",
+    "decimals": 18,
+    "priceUsd": 0.2682974266807716,
+    "ambiguous": false,
+    "stable": false
+  },
+  "FF": {
+    "address": "0xAC23B90A79504865D52B49B327328411a23d4dB2",
+    "decimals": 18,
+    "priceUsd": 0.07286514976985675,
+    "ambiguous": false,
+    "stable": false
+  },
+  "PENDLE": {
+    "address": "0xb3Ed0A426155B79B898849803E3B36552f7ED507",
+    "decimals": 18,
+    "priceUsd": 1.3883784601247247,
+    "ambiguous": false,
+    "stable": false
+  },
+  "STG": {
+    "address": "0xB0D502E938ed5f4df2E681fE6E419ff29631d62b",
+    "decimals": 18,
+    "priceUsd": 0.23790359851047913,
+    "ambiguous": false,
+    "stable": false
+  },
+  "AXS": {
+    "address": "0x715D400F88C167884bbCc41C5FeA407ed4D2f8A0",
+    "decimals": 18,
+    "priceUsd": 0.9272065967179862,
+    "ambiguous": false,
+    "stable": false
+  },
+  "TWT": {
+    "address": "0x4B0F1812e5Df2A09796481Ff14017e6005508003",
+    "decimals": 18,
+    "priceUsd": 0.3815271230564091,
+    "ambiguous": false,
+    "stable": false
+  },
+  "HOME": {
+    "address": "0x4BfAa776991E85e5f8b1255461cbbd216cFc714f",
+    "decimals": 18,
+    "priceUsd": 0.02727741232700872,
+    "ambiguous": false,
+    "stable": false
+  },
+  "RAY": {
+    "address": "0x13b6A55662f6591f8B8408Af1C73B017E32eEdB8",
+    "decimals": 6,
+    "priceUsd": 0.5885137743604899,
+    "ambiguous": false,
+    "stable": false
+  },
+  "COMP": {
+    "address": "0x52CE071Bd9b1C4B00A0b92D298c512478CaD67e8",
+    "decimals": 18,
+    "priceUsd": 17.175972197447834,
+    "ambiguous": false,
+    "stable": false
+  },
+  "GWEI": {
+    "address": "0x30117E4bC17d7B044194b76A38365C53b72F7D49",
+    "decimals": 18,
+    "priceUsd": 0.10735706032787197,
+    "ambiguous": false,
+    "stable": false
+  },
+  "XCN": {
+    "address": "0x7324c7C0d95CEBC73eEa7E85CbAac0dBdf88a05b",
+    "decimals": 18,
+    "priceUsd": 0.003926423034346912,
+    "ambiguous": false,
+    "stable": false
+  },
+  "XPL": {
+    "address": "0x405FBc9004D857903bFD6b3357792D71a50726b0",
+    "decimals": 18,
+    "priceUsd": 0.09702160660395885,
+    "ambiguous": false,
+    "stable": false
+  },
+  "BAT": {
+    "address": "0x101d82428437127bF1608F699CD651e6Abf9766E",
+    "decimals": 18,
+    "priceUsd": 0.08867519448169087,
+    "ambiguous": false,
+    "stable": false
+  },
+  "SKYAI": {
+    "address": "0x92aa03137385F18539301349dcfC9EbC923fFb10",
+    "decimals": 18,
+    "priceUsd": 0.35329340252334024,
+    "ambiguous": false,
+    "stable": false
+  },
+  "APE": {
+    "address": "0x8f86a15EC17cb3369d8b3E666dAdBC11daA82b79",
+    "decimals": 18,
+    "priceUsd": 0.1263938386313732,
+    "ambiguous": false,
+    "stable": false
+  },
+  "SFP": {
+    "address": "0xD41FDb03Ba84762dD66a0af1a6C8540FF1ba5dfb",
+    "decimals": 18,
+    "priceUsd": 0.2337016146158857,
+    "ambiguous": false,
+    "stable": false
+  },
+  "TAG": {
+    "address": "0x208bF3E7dA9639f1Eaefa2DE78c23396B0682025",
+    "decimals": 18,
+    "priceUsd": 0.0010150293450361867,
+    "ambiguous": false,
+    "stable": false
+  },
+  "NXPC": {
+    "address": "0xf2b51CC1850fEd939658317a22d73d3482767591",
+    "decimals": 18,
+    "priceUsd": 0.3178507896697124,
+    "ambiguous": false,
+    "stable": false
+  },
+  "AB": {
+    "address": "0x95034f653D5D161890836Ad2B6b8cc49D14e029a",
+    "decimals": 18,
+    "priceUsd": 0.0010464507753458266,
+    "ambiguous": false,
+    "stable": false
+  },
+  "SAHARA": {
+    "address": "0xFDFfB411C4A70AA7C95D5C981a6Fb4Da867e1111",
+    "decimals": 18,
+    "priceUsd": 0.013646821435355515,
+    "ambiguous": false,
+    "stable": false
+  },
+  "1INCH": {
+    "address": "0x111111111117dC0aa78b770fA6A738034120C302",
+    "decimals": 18,
+    "priceUsd": 0.07250192898508033,
+    "ambiguous": false,
+    "stable": false
+  },
+  "RIVER": {
+    "address": "0xdA7AD9dea9397cffdDAE2F8a052B82f1484252B3",
+    "decimals": 18,
+    "priceUsd": 4.401038972679391,
+    "ambiguous": false,
+    "stable": false
+  },
+  "MYX": {
+    "address": "0xD82544bf0dfe8385eF8FA34D67e6e4940CC63e16",
+    "decimals": 18,
+    "priceUsd": 0.13948566757863393,
+    "ambiguous": false,
+    "stable": false
+  },
+  "RAVE": {
+    "address": "0x97693439EA2f0ecdeb9135881E49f354656a911c",
+    "decimals": 18,
+    "priceUsd": 0.27202947590392174,
+    "ambiguous": false,
+    "stable": false
+  },
+  "SNX": {
+    "address": "0x9Ac983826058b8a9C7Aa1C9171441191232E8404",
+    "decimals": 18,
+    "priceUsd": 0.2424465035179717,
+    "ambiguous": false,
+    "stable": false
+  },
+  "FORM": {
+    "address": "0x5b73A93b4E5e4f1FD27D8b3F8C97D69908b5E284",
+    "decimals": 18,
+    "priceUsd": 0.2288794095492708,
+    "ambiguous": false,
+    "stable": false
+  },
+  "LAB": {
+    "address": "0x7ec43Cf65F1663F820427C62A5780b8f2E25593A",
+    "decimals": 18,
+    "priceUsd": 16.144541374477377,
+    "ambiguous": false,
+    "stable": false
+  },
+  "USDf": {
+    "address": "0x5A110fC00474038f6c02E89C707D638602EA44B5",
+    "decimals": 18,
+    "priceUsd": 0.9972369619502717,
+    "ambiguous": true,
+    "stable": true
+  },
+  "CTM": {
+    "address": "0xc8Fb80fCc03f699C70ff0CC08C09106288888888",
+    "decimals": 18,
+    "priceUsd": 0.18043161822793038,
+    "ambiguous": true,
+    "stable": false
+  },
+  "BDX": {
+    "address": "0x6ad12E761b438beA3EA09F6C6266556Bb24C2181",
+    "decimals": 9,
+    "priceUsd": 0.007219932060916095,
+    "ambiguous": false,
+    "stable": false
+  },
+  "SLX": {
+    "address": "0x8A063A9ff4dE28dcB87117cc759BE6cE70e09F81",
+    "decimals": 18,
+    "priceUsd": 0.0011643745423705887,
+    "ambiguous": true,
+    "stable": false
+  },
+  "UB": {
+    "address": "0x40b8129B786D766267A7a118cF8C07E31CDB6Fde",
+    "decimals": 18,
+    "priceUsd": 0.1130313106004336,
+    "ambiguous": false,
+    "stable": false
+  },
+  "DUCKY": {
+    "address": "0xaDB50D6a3f931E5b4A14D06A4A77fe71171A462f",
+    "decimals": 18,
+    "priceUsd": 0.0006261675784690488,
+    "ambiguous": false,
+    "stable": false
+  },
+  "FRAX": {
+    "address": "0x90C97F71E18723b0Cf0dfa30ee176Ab653E89F40",
+    "decimals": 18,
+    "priceUsd": 0.9899273985007329,
+    "ambiguous": false,
+    "stable": true
+  },
+  "BILL": {
+    "address": "0xDf24f8c21Cb404B3031a450D8e049D6E39FC1fA5",
+    "decimals": 18,
+    "priceUsd": 0.06390604264485455,
+    "ambiguous": false,
+    "stable": false
+  },
+  "WFI": {
+    "address": "0x90c48855Bb69f9D2C261Efd0D8C7F35990F2dd6f",
+    "decimals": 18,
+    "priceUsd": 2.008574120201107,
+    "ambiguous": false,
+    "stable": false
+  },
+  "KOGE": {
+    "address": "0xe6DF05CE8C8301223373CF5B969AFCb1498c5528",
+    "decimals": 18,
+    "priceUsd": 63.340473475071136,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ALE": {
+    "address": "0x9dCE13E71B11eb5Df66ca269bD657696587Fd4E2",
+    "decimals": 18,
+    "priceUsd": 0.2582235803281818,
+    "ambiguous": false,
+    "stable": false
+  },
+  "USDF": {
+    "address": "0x5A110fC00474038f6c02E89C707D638602EA44B5",
+    "decimals": 18,
+    "priceUsd": 0.9972369619502717,
+    "ambiguous": true,
+    "stable": true
+  },
+  "GOMINING": {
+    "address": "0x7Ddc52c4De30e94Be3A6A0A2b259b2850f421989",
+    "decimals": 18,
+    "priceUsd": 0.2726407830116456,
+    "ambiguous": false,
+    "stable": false
+  },
+  "GUA": {
+    "address": "0xA5C8e1513B6A08334b479fe4D71F1253259469BE",
+    "decimals": 18,
+    "priceUsd": 1.1896866810997297,
+    "ambiguous": false,
+    "stable": false
+  },
+  "DUSD": {
+    "address": "0xaf44A1E76F56eE12ADBB7ba8acD3CbD474888122",
+    "decimals": 6,
+    "priceUsd": 0.9983378961581142,
+    "ambiguous": false,
+    "stable": true
+  },
+  "0G": {
+    "address": "0x4B948d64dE1F71fCd12fB586f4c776421a35b3eE",
+    "decimals": 18,
+    "priceUsd": 0.27150763071366174,
+    "ambiguous": false,
+    "stable": false
+  },
+  "BEAM": {
+    "address": "0x62D0A8458eD7719FDAF978fe5929C6D342B0bFcE",
+    "decimals": 18,
+    "priceUsd": 0.0014488055381032391,
+    "ambiguous": false,
+    "stable": false
+  },
+  "MY": {
+    "address": "0xF0EBB572643336834d516C485ad31d3299999999",
+    "decimals": 18,
+    "priceUsd": 0.06768158352290884,
+    "ambiguous": false,
+    "stable": false
+  },
+  "SOON": {
+    "address": "0xb9E1Fd5A02D3A33b25a14d661414E6ED6954a721",
+    "decimals": 18,
+    "priceUsd": 0.160860380929643,
+    "ambiguous": true,
+    "stable": false
+  },
+  "REAL": {
+    "address": "0x65e7a112dB1142EAE919201b1232f7aA488Ed83c",
+    "decimals": 6,
+    "priceUsd": 0.0598946357241816,
+    "ambiguous": false,
+    "stable": false
+  },
+  "Q": {
+    "address": "0xc07e1300dc138601FA6B0b59f8D0FA477e690589",
+    "decimals": 18,
+    "priceUsd": 0.0184016467156443,
+    "ambiguous": false,
+    "stable": false
+  },
+  "AIOZ": {
+    "address": "0x33d08D8C7a168333a85285a68C0042b39fC3741D",
+    "decimals": 18,
+    "priceUsd": 0.05784937909758876,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ZIG": {
+    "address": "0x8C907e0a72C3d55627E853f4ec6a96b0C8771145",
+    "decimals": 18,
+    "priceUsd": 0.05074841838637385,
+    "ambiguous": false,
+    "stable": false
+  },
+  "YFI": {
+    "address": "0x88f1A5ae2A3BF98AEAF342D26B30a79438c9142e",
+    "decimals": 18,
+    "priceUsd": 1850.709900025977,
+    "ambiguous": false,
+    "stable": false
+  },
+  "TAC": {
+    "address": "0x1219c409faBe2C27Bd0D1A565daeed9Bd9f271dE",
+    "decimals": 18,
+    "priceUsd": 0.02212337635766912,
+    "ambiguous": false,
+    "stable": false
+  },
+  "lisUSD": {
+    "address": "0x0782b6d8c4551B9760e74c0545a9bCD90bdc41E5",
+    "decimals": 18,
+    "priceUsd": 0.9947546619593124,
+    "ambiguous": false,
+    "stable": true
+  },
+  "CYS": {
+    "address": "0x0C69199C1562233640e0Db5Ce2c399A88eB507C7",
+    "decimals": 18,
+    "priceUsd": 0.4311764391109107,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ZAMA": {
+    "address": "0x6907A5986C4950Bdaf2F81828Ec0737ce787519f",
+    "decimals": 18,
+    "priceUsd": 0.033038254528958366,
+    "ambiguous": false,
+    "stable": false
+  },
+  "TRIA": {
+    "address": "0xb0b92de23bAa85fB06208277E925ceD53edab482",
+    "decimals": 18,
+    "priceUsd": 0.027977783249002516,
+    "ambiguous": false,
+    "stable": false
+  },
+  "HUMA": {
+    "address": "0x92516e0DDf1dDBF7FAB1b79CaC26689fDC5ba8e6",
+    "decimals": 6,
+    "priceUsd": 0.02319589643055702,
+    "ambiguous": false,
+    "stable": false
+  },
+  "PLUME": {
+    "address": "0x5aFadCd1E8E3CA78Ee2D37100102f2aec8Bc0Aa8",
+    "decimals": 18,
+    "priceUsd": 0.022162981136701735,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ZIL": {
+    "address": "0xb86AbCb37C3A4B64f74f59301AFF131a1BEcC787",
+    "decimals": 12,
+    "priceUsd": 0.0030998296508437328,
+    "ambiguous": false,
+    "stable": false
+  },
+  "XPR": {
+    "address": "0x5de3939b2F811A61d830E6F52d13B066881412ab",
+    "decimals": 4,
+    "priceUsd": 0.0022446740267086243,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ZETA": {
+    "address": "0x0000028a2eB8346cd5c0267856aB7594B7a55308",
+    "decimals": 18,
+    "priceUsd": 0.03616192322982781,
+    "ambiguous": false,
+    "stable": false
+  },
+  "NILA": {
+    "address": "0x00f8Da33734FeB9b946fEC2228C25072D2e2E41f",
+    "decimals": 18,
+    "priceUsd": 0.07872445116140259,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ROSE": {
+    "address": "0xF00600eBC7633462BC4F9C61eA2cE99F5AAEBd4a",
+    "decimals": 18,
+    "priceUsd": 0.006473144700302192,
+    "ambiguous": false,
+    "stable": false
+  },
+  "VELO": {
+    "address": "0xf486ad071f3bEE968384D2E39e2D8aF0fCf6fd46",
+    "decimals": 18,
+    "priceUsd": 0.0035123747319920576,
+    "ambiguous": false,
+    "stable": false
+  },
+  "UAI": {
+    "address": "0x3E5d4f8aee0D9B3082d5f6DA5D6e225D17ba9ea0",
+    "decimals": 18,
+    "priceUsd": 0.31028823456953125,
+    "ambiguous": false,
+    "stable": false
+  },
+  "BRETT": {
+    "address": "0xA7440029ecA41dEaBd8775Ef1D6086b37d4dF8D6",
+    "decimals": 18,
+    "priceUsd": 0.006445821147404317,
+    "ambiguous": false,
+    "stable": false
+  },
+  "OPEN": {
+    "address": "0xA227Cc36938f0c9E09CE0e64dfab226cad739447",
+    "decimals": 18,
+    "priceUsd": 0.21603761680709535,
+    "ambiguous": false,
+    "stable": false
+  },
+  "BSB": {
+    "address": "0x595dEaad1eB5476Ff1E649fDb7EFC36F1E4679cc",
+    "decimals": 18,
+    "priceUsd": 0.47378029605356253,
+    "ambiguous": false,
+    "stable": false
+  },
+  "TOSHI": {
+    "address": "0x6a2608Dabe09bc1128EEC7275B92DFB939D5Db3f",
+    "decimals": 18,
+    "priceUsd": 0.00012354144879580696,
+    "ambiguous": false,
+    "stable": false
+  },
+  "BAS": {
+    "address": "0x0F0df6cB17ee5E883eddFEf9153fC6036BDB4e37",
+    "decimals": 18,
+    "priceUsd": 0.030170414524992344,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ACH": {
+    "address": "0xBc7d6B50616989655AfD682fb42743507003056D",
+    "decimals": 8,
+    "priceUsd": 0.005067023801855264,
+    "ambiguous": false,
+    "stable": false
+  },
+  "AXL": {
+    "address": "0x8b1f4432F943c465A973FeDC6d7aa50Fc96f1f65",
+    "decimals": 6,
+    "priceUsd": 0.043791413286202896,
+    "ambiguous": false,
+    "stable": false
+  },
+  "LUR": {
+    "address": "0xc66B6f38aE5053A109cfd8639E0Ee17EC69cf788",
+    "decimals": 18,
+    "priceUsd": 4.940357202523107,
+    "ambiguous": false,
+    "stable": false
+  },
+  "ELF": {
+    "address": "0xa3f020a5C92e15be13CAF0Ee5C95cF79585EeCC9",
+    "decimals": 18,
+    "priceUsd": 0.06359230234832135,
+    "ambiguous": false,
+    "stable": false
+  },
+  "KAVA": {
+    "address": "0x5F88AB06e8dfe89DF127B2430Bba4Af600866035",
+    "decimals": 6,
+    "priceUsd": 0.04566363111855087,
+    "ambiguous": true,
+    "stable": false
+  },
+  "APR": {
+    "address": "0x299AD4299Da5b2b93Fba4c96967B040C7F611099",
+    "decimals": 18,
+    "priceUsd": 0.21152231249005085,
+    "ambiguous": false,
+    "stable": false
+  },
+  "IRYS": {
+    "address": "0x91152B4Ef635403efBAe860edD0F8c321d7c035d",
+    "decimals": 18,
+    "priceUsd": 0.01688026078957909,
+    "ambiguous": false,
+    "stable": false
+  },
+  "XUSD": {
+    "address": "0x324E8E649A6A3dF817F97CdDBED2b746b62553dD",
+    "decimals": 18,
+    "priceUsd": 1.313087939236465,
+    "ambiguous": false,
+    "stable": true
+  },
+  "BARD": {
+    "address": "0xd23A186A78c0B3B805505E5f8ea4083295ef9f3a",
+    "decimals": 18,
+    "priceUsd": 0.11349794055856743,
+    "ambiguous": false,
+    "stable": false
+  },
+  "DUSK": {
+    "address": "0xB2BD0749DBE21f623d9BABa856D3B0f0e1BFEc9C",
+    "decimals": 18,
+    "priceUsd": 0.09014434609019159,
+    "ambiguous": false,
+    "stable": false
+  },
+  "SUSHI": {
+    "address": "0x947950BcC74888a40Ffa2593C5798F11Fc9124C4",
+    "decimals": 18,
+    "priceUsd": 0.1745693037529232,
+    "ambiguous": false,
+    "stable": false
+  },
+  "PEAQ": {
+    "address": "0x8b9Ee39195eA99d6ddD68030F44131116bc218F6",
+    "decimals": 18,
+    "priceUsd": 0.021174805836531387,
+    "ambiguous": false,
+    "stable": false
+  },
+  "COAI": {
+    "address": "0x0A8D6C86e1bcE73fE4D0bD531e1a567306836EA5",
+    "decimals": 18,
+    "priceUsd": 0.3285998470556112,
+    "ambiguous": false,
+    "stable": false
+  },
+  "BDCA": {
+    "address": "0x0c8382719ef242CaE2247E4DeCb2891fBF699818",
+    "decimals": 18,
+    "priceUsd": 0.652607418328309,
+    "ambiguous": false,
+    "stable": false
+  },
+  "XAUM": {
+    "address": "0x23AE4fd8E7844cdBc97775496eBd0E8248656028",
+    "decimals": 18,
+    "priceUsd": 4219.118579905052,
+    "ambiguous": false,
+    "stable": false
+  }
+}
