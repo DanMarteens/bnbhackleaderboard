@@ -86,8 +86,7 @@ border-radius:12px;padding:11px 14px;margin:6px 0 16px;font-size:13px;color:var(
   <div id="rows"></div>
 </div>
 <div class="foot">
-  Ranked by total return with a ~30% max-drawdown cap · built from on-chain data
-  (competition contract + Multicall3 + CoinGecko). <b>Permissionless &amp; verifiable.</b><br>
+  Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
   Updated <span id="upd"></span> · refreshes every ~30 min · community-built, not affiliated with organizers.
 </div></div>
 <script>
