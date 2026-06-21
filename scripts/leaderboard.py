@@ -438,8 +438,11 @@ def main():
     rows = []
     for a in agents:
         s = series(a); v = vals.get(a, 0.0); b = baseline.get(a) or 0.0; f = flows.get(a, 0.0)
-        cap = b + f                              # total capital deployed = start + net deposits
-        allret = round((v - cap) / cap * 100, 2) if cap > MINCAP else None
+        # Deposit-INVARIANT return: measured against the fixed go-live stake, with external
+        # deposits/withdrawals removed from value. A top-up adds equally to value and to f,
+        # so (v - f) is unchanged and the denominator is fixed -> PnL doesn't move at all.
+        # (Agents funded only after the go-live snapshot have b < MINCAP -> shown as "—".)
+        allret = round(((v - f) / b - 1) * 100, 2) if b > MINCAP else None
         win = {"1h": winret(s, 3600), "24h": winret(s, 86400), "all": allret}
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, b)

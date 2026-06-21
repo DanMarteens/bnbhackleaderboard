@@ -144,7 +144,7 @@ background:
 </div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
 <div class="foot">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
-  PnL is deposit-adjusted: return = (value − net deposits) ÷ (start capital + net deposits), so topping up a wallet can't inflate the rank.<br>
+  PnL is deposit-invariant: return = (value − net deposits) ÷ go-live capital, so depositing or withdrawing leaves the rank unchanged — only trading moves it.<br>
   Updated <span id="upd"></span> · refreshes every ~30 min · not affiliated with organizers.
   <div class="by">built by <b><a href="https://x.com/itsabigdill" target="_blank" rel="noopener">@itsabigdill</a></b>
    · <a href="https://github.com/DanMarteens" target="_blank" rel="noopener">github</a>
