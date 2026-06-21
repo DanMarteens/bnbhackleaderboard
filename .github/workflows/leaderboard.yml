@@ -44,3 +44,5 @@ jobs:
           path: public
       - id: deploy
         uses: actions/deploy-pages@v4
+
+# trigger registration
