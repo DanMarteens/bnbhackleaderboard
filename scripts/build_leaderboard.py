@@ -72,6 +72,11 @@ background:
 .seg button{border:0;background:transparent;color:var(--mut);font:600 13px "Inter";padding:9px 15px;border-radius:11px;cursor:pointer;transition:.18s}
 .seg button:hover{color:var(--txt)}
 .seg button.on{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0a0a0a;box-shadow:0 4px 16px rgba(240,185,11,.35)}
+.selwrap{position:relative;display:inline-block}
+.selwrap::after{content:"▾";position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--mut);pointer-events:none;font-size:11px}
+.sel{appearance:none;-webkit-appearance:none;background:var(--glass);border:1px solid var(--line);border-radius:14px;color:var(--txt);padding:12px 36px 12px 16px;font:14px "Inter";backdrop-filter:blur(14px);cursor:pointer;outline:none;transition:.2s}
+.sel:focus{border-color:rgba(56,97,251,.6);box-shadow:0 0 0 3px rgba(56,97,251,.13)}
+.sel option{background:#0d1430;color:var(--txt)}
 .tbl{overflow:hidden;background:var(--glass);border:1px solid var(--line);border-radius:20px;backdrop-filter:blur(24px);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.06)}
 .thead,.row{display:grid;grid-template-columns:44px 1.5fr 82px 94px 78px 70px 122px;align-items:center;gap:10px;padding:14px 18px}
 .thead{border-bottom:1px solid var(--line);font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
@@ -114,11 +119,11 @@ background:
 <div class="tools">
   <input id="q" class="inp" placeholder="search agent address…"/>
   <input id="minv" class="inp" type="number" placeholder="min $"/>
-  <div class="seg" id="flt">
-    <button data-v="all" class="on">All</button>
-    <button data-v="funded">Funded</button>
-    <button data-v="profit">In&nbsp;profit</button>
-  </div>
+  <div class="selwrap"><select id="flt" class="sel">
+    <option value="all">all agents</option>
+    <option value="funded">funded only</option>
+    <option value="profit">in profit</option>
+  </select></div>
 </div>
 <div class="wbar"><span class="wl">PnL window</span>
   <div class="seg" id="wins"><button data-w="1h">1H</button><button data-w="12h">12H</button><button data-w="24h">24H</button><button data-w="day">Day</button><button data-w="all" class="on">All</button></div>
@@ -181,11 +186,11 @@ function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>
 function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
  const mv=parseFloat($('minv').value);if(!isNaN(mv))rs=rs.filter(r=>r.value>=mv);
- const f=$('flt').querySelector('button.on').dataset.v;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(winv(r)||0)>0);
+ const f=$('flt').value;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(winv(r)||0)>0);
  rs.sort((a,b)=>{const av=key==='ret_pct'?(winv(a)??-1e9):(a[key]??-1e9),bv=key==='ret_pct'?(winv(b)??-1e9):(b[key]??-1e9);return (av-bv)*dir;});
  $('rows').innerHTML=rs.map(rowHTML).join('')||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
 $('q').oninput=render;$('minv').oninput=render;
-$('flt').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('flt').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');render();});
+$('flt').onchange=render;
 $('wins').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('wins').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');WIN=b.dataset.w;ranks();stats();badges();render();});
 ranks();stats();badges();render();
 </script></body></html>"""
