@@ -128,7 +128,18 @@ background:
   </select></div>
 </div>
 <div class="wbar"><span class="wl">PnL window</span>
-  <div class="seg" id="wins"><button data-w="1h">1H</button><button data-w="12h">12H</button><button data-w="24h">24H</button><button data-w="day">Day</button><button data-w="all" class="on">All</button></div>
+  <div class="selwrap"><select id="wins" class="sel">
+    <option value="1h">1H · rolling</option>
+    <option value="24h">24H · rolling</option>
+    <option value="d1">Day 1 · Jun 22</option>
+    <option value="d2">Day 2 · Jun 23</option>
+    <option value="d3">Day 3 · Jun 24</option>
+    <option value="d4">Day 4 · Jun 25</option>
+    <option value="d5">Day 5 · Jun 26</option>
+    <option value="d6">Day 6 · Jun 27</option>
+    <option value="d7">Day 7 · Jun 28</option>
+    <option value="all" selected>All · since go-live</option>
+  </select></div>
 </div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
 <div class="foot">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
@@ -154,7 +165,7 @@ function cd(){const n=Date.now();let t,l;if(n<START){t=START;l='Starts in';}else
  const d=Math.max(0,t-n);$('cd').innerHTML=`${l} &nbsp;<b>${Math.floor(d/864e5)}d ${Math.floor(d%864e5/36e5)}h ${Math.floor(d%36e5/6e4)}m</b>`;}
 cd();setInterval(cd,60000);
 $('upd').textContent=new Date(D.built_ts*1000).toUTCString().replace('GMT','UTC');
-const WINS={'1h':'1H','12h':'12H','24h':'24H','day':'Day','all':'All'};
+const WINS={'1h':'1H','24h':'24H','all':'All','d1':'Day 1','d2':'Day 2','d3':'Day 3','d4':'Day 4','d5':'Day 5','d6':'Day 6','d7':'Day 7'};
 const PRIZE={1:'$10k',2:'$6k',3:'$4k',4:'$2k',5:'$2k'};
 let WIN='all',key='ret_pct',dir=-1;
 const winv=r=>{const v=r.win?r.win[WIN]:r.ret_pct;return v==null?null:v;};
@@ -195,7 +206,8 @@ function render(){let rs=R.slice();
  $('rows').innerHTML=rs.map(rowHTML).join('')||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
 $('q').oninput=render;$('minv').oninput=render;
 $('flt').onchange=render;
-$('wins').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('wins').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');WIN=b.dataset.w;ranks();stats();badges();render();});
+(function(){const sel=$('wins');for(let n=1;n<=7;n++){const st=Date.UTC(2026,5,21+n),o=sel.querySelector('option[value="d'+n+'"]');if(o&&Date.now()<st){o.disabled=true;o.textContent+=' · soon';}}})();
+$('wins').onchange=()=>{WIN=$('wins').value;ranks();stats();badges();render();};
 ranks();stats();badges();render();
 </script></body></html>"""
 

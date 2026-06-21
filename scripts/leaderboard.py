@@ -287,7 +287,10 @@ def main():
         return [round(vs[min(len(vs) - 1, int(i * step))], 4) for i in range(k)]
 
     import datetime as _dt
-    day0 = int(_dt.datetime.fromtimestamp(now, _dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    HACK_DAYS = 7                  # Jun 22..28 UTC -> Day 1..Day 7
+    def _day_bounds(n):            # n=1..7 -> (start_ts, end_ts) UTC; Day 1 = Jun 22
+        st = _dt.datetime(2026, 6, 21 + n, tzinfo=_dt.timezone.utc).timestamp()
+        return int(st), int(st + 86400)
 
     def winret(s, secs):           # return over a rolling window
         if len(s) < 2:
@@ -295,21 +298,40 @@ def main():
         past = next((v for t, v in s if t >= now - secs), s[0][1])
         return round((s[-1][1] / past - 1) * 100, 2) if past else None
 
-    def dayret(s):                 # return since 00:00 UTC today
-        if len(s) < 2:
+    def _at_or_before(s, ts):      # last snapshot value with t <= ts (s ascending)
+        val = None
+        for t, v in s:
+            if t <= ts:
+                val = v
+            else:
+                break
+        return val
+
+    def dayret_n(s, n, base):      # close-to-close return for hackathon Day n
+        st, en = _day_bounds(n)
+        if now < st:               # day hasn't started yet
             return None
-        past = next((v for t, v in s if t >= day0), s[0][1])
-        return round((s[-1][1] / past - 1) * 100, 2) if past else None
+        prev = base if n == 1 else _at_or_before(s, st)   # Day 1 opens at go-live baseline
+        if not prev or prev <= 0:
+            prev = next((v for t, v in s if t >= st), None)
+        if not prev or prev <= 0:
+            return None
+        cur = s[-1][1] if now < en else _at_or_before(s, en)   # in-progress -> current
+        if not cur:
+            return None
+        return round((cur / prev - 1) * 100, 2)
 
     rows = []
     for a in agents:
         s = series(a); v = vals.get(a, 0.0); b = baseline.get(a)
         allret = round((v / b - 1) * 100, 2) if (b and b > 0) else None
+        win = {"1h": winret(s, 3600), "24h": winret(s, 86400), "all": allret}
+        for n in range(1, HACK_DAYS + 1):
+            win["d%d" % n] = dayret_n(s, n, b)
         rows.append({"agent": a, "value": v,
                      "ret_pct": allret, "chg24h": winret(s, 86400),
                      "dd_pct": drawdown(s), "spark": spark(s), "holds": holds.get(a, []),
-                     "win": {"1h": winret(s, 3600), "12h": winret(s, 43200),
-                             "24h": winret(s, 86400), "day": dayret(s), "all": allret}})
+                     "win": win})
     rows.sort(key=lambda r: (r["ret_pct"] if r["ret_pct"] is not None else -1e9, r["value"]), reverse=True)
     for i, r in enumerate(rows):
         r["rank"] = i + 1

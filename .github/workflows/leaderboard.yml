@@ -23,20 +23,30 @@ jobs:
           python-version: "3.12"
       - run: pip install "eth-abi" "eth-hash[pycryptodome]" pyyaml
       - name: Compute leaderboard (free public RPC + Multicall3 + coingecko)
+        env:
+          ARCHIVE_RPC: ${{ secrets.ARCHIVE_RPC }}
         run: |
           GO_LIVE=$(date -u -d "2026-06-22 00:00:00" +%s)
           NOW=$(date -u +%s)
+          HOUR=$(date -u +%H)
+          FLAGS=""
+          # Re-enumerate registrants once a day (registration stays open mid-event).
+          # Needs the archive RPC; skipped gracefully if the secret isn't set.
+          if [ "$HOUR" = "00" ] && [ -n "$ARCHIVE_RPC" ]; then
+            echo "daily re-enumeration of registrants"
+            FLAGS="$FLAGS --enumerate"
+          fi
           if [ ! -f dashboard/lb_baseline.json ] && [ "$NOW" -ge "$GO_LIVE" ]; then
             echo "Competition open + no baseline yet -> snapshotting go-live baseline"
-            python scripts/leaderboard.py --baseline
-          else
-            python scripts/leaderboard.py
+            FLAGS="$FLAGS --baseline"
           fi
+          echo "flags:$FLAGS"
+          python scripts/leaderboard.py $FLAGS
       - name: Persist history + baseline
         run: |
           git config user.name "leaderboard-bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dashboard/history.json dashboard/lb_baseline.json 2>/dev/null || true
+          git add dashboard/history.json dashboard/lb_baseline.json dashboard/participants.json 2>/dev/null || true
           git commit -m "snapshot [skip ci]" || true
           git push || true
       - name: Build page
