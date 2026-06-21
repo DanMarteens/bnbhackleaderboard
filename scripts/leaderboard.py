@@ -271,13 +271,30 @@ def main():
         step = len(vs) / k
         return [round(vs[min(len(vs) - 1, int(i * step))], 4) for i in range(k)]
 
+    import datetime as _dt
+    day0 = int(_dt.datetime.fromtimestamp(now, _dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+
+    def winret(s, secs):           # return over a rolling window
+        if len(s) < 2:
+            return None
+        past = next((v for t, v in s if t >= now - secs), s[0][1])
+        return round((s[-1][1] / past - 1) * 100, 2) if past else None
+
+    def dayret(s):                 # return since 00:00 UTC today
+        if len(s) < 2:
+            return None
+        past = next((v for t, v in s if t >= day0), s[0][1])
+        return round((s[-1][1] / past - 1) * 100, 2) if past else None
+
     rows = []
     for a in agents:
         s = series(a); v = vals.get(a, 0.0); b = baseline.get(a)
+        allret = round((v / b - 1) * 100, 2) if (b and b > 0) else None
         rows.append({"agent": a, "value": v,
-                     "ret_pct": round((v / b - 1) * 100, 2) if (b and b > 0) else None,
-                     "chg24h": chg24h(s), "dd_pct": drawdown(s), "spark": spark(s),
-                     "holds": holds.get(a, [])})
+                     "ret_pct": allret, "chg24h": winret(s, 86400),
+                     "dd_pct": drawdown(s), "spark": spark(s), "holds": holds.get(a, []),
+                     "win": {"1h": winret(s, 3600), "12h": winret(s, 43200),
+                             "24h": winret(s, 86400), "day": dayret(s), "all": allret}})
     rows.sort(key=lambda r: (r["ret_pct"] if r["ret_pct"] is not None else -1e9, r["value"]), reverse=True)
     for i, r in enumerate(rows):
         r["rank"] = i + 1

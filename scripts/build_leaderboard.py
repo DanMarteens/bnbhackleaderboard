@@ -61,7 +61,9 @@ background:
 .b .bl{font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
 .b .bn{font:600 13px/1 var(--mono);margin:10px 0 6px;display:flex;align-items:center;gap:7px}
 .b .bv{font:800 18px/1 "Inter"}
-.tools{display:flex;gap:10px;align-items:center;margin:24px 0 14px;flex-wrap:wrap}
+.tools{display:flex;gap:10px;align-items:center;margin:24px 0 12px;flex-wrap:wrap}
+.wbar{display:flex;align-items:center;gap:12px;margin:0 0 14px;flex-wrap:wrap}
+.wl{font:600 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
 .inp{background:var(--glass);border:1px solid var(--line);border-radius:14px;color:var(--txt);padding:12px 16px;
  font:14px "Inter";backdrop-filter:blur(14px);outline:none;transition:.2s;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
 .inp::placeholder{color:var(--mut)}.inp:focus{border-color:rgba(240,185,11,.6);box-shadow:0 0 0 3px rgba(240,185,11,.13)}
@@ -118,6 +120,9 @@ background:
     <button data-v="profit">In&nbsp;profit</button>
   </div>
 </div>
+<div class="wbar"><span class="wl">PnL window</span>
+  <div class="seg" id="wins"><button data-w="1h">1H</button><button data-w="12h">12H</button><button data-w="24h">24H</button><button data-w="day">Day</button><button data-w="all" class="on">All</button></div>
+</div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
 <div class="foot">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
   Updated <span id="upd"></span> · refreshes every ~30 min · not affiliated with organizers.
@@ -142,40 +147,47 @@ function cd(){const n=Date.now();let t,l;if(n<START){t=START;l='Starts in';}else
  const d=Math.max(0,t-n);$('cd').innerHTML=`${l} &nbsp;<b>${Math.floor(d/864e5)}d ${Math.floor(d%864e5/36e5)}h ${Math.floor(d%36e5/6e4)}m</b>`;}
 cd();setInterval(cd,60000);
 $('upd').textContent=new Date(D.built_ts*1000).toUTCString().replace('GMT','UTC');
-$('stats').innerHTML=[['Agents',S.n],['Funded',S.funded],['Deployed',fmt(S.deployed||0)],
- LIVE?['In profit',S.in_profit]:null,LIVE?['Avg PnL',(S.avg_ret>=0?'+':'')+S.avg_ret+'%']:null,
- LIVE?['Survivors',S.survivors+'/'+S.n]:null].filter(Boolean)
- .map(([k,v])=>`<div class="st"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
-if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
-const funded=R.filter(r=>r.value>0);
-if(funded.length){const pk=(k,d)=>funded.slice().sort((a,b)=>((b[k]??-1e9)-(a[k]??-1e9))*d)[0];
- const topR=pk('ret_pct',1),topM=pk('chg24h',1),safe=funded.slice().sort((a,b)=>a.dd_pct-b.dd_pct)[0];
+const WINS={'1h':'1H','12h':'12H','24h':'24H','day':'Day','all':'All'};
+let WIN='all',key='ret_pct',dir=-1;
+const winv=r=>{const v=r.win?r.win[WIN]:r.ret_pct;return v==null?null:v;};
+function ranks(){R.slice().sort((a,b)=>((winv(b)??-1e9)-(winv(a)??-1e9))).forEach((r,i)=>r._rk=i+1);}
+function stats(){const rv=R.map(winv).filter(v=>v!=null),av=rv.length?rv.reduce((a,b)=>a+b,0)/rv.length:null;
+ $('stats').innerHTML=[['Agents',S.n],['Funded',S.funded],['Deployed',fmt(S.deployed||0)],
+  LIVE?['In profit',R.filter(r=>(winv(r)||0)>0).length]:null,
+  LIVE?['Avg PnL',av==null?'—':(av>=0?'+':'')+av.toFixed(2)+'%']:null,
+  LIVE?['Survivors',S.survivors+'/'+S.n]:null].filter(Boolean)
+  .map(([k,v])=>`<div class="st"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');}
+function badges(){const f=R.filter(r=>r.value>0);if(!f.length){$('badges').innerHTML='';return;}
+ const top=f.slice().sort((a,b)=>((winv(b)??-1e9)-(winv(a)??-1e9)))[0];
+ const mov=f.slice().sort((a,b)=>(((b.win&&b.win['24h'])??-1e9)-((a.win&&a.win['24h'])??-1e9)))[0];
+ const safe=f.slice().sort((a,b)=>a.dd_pct-b.dd_pct)[0];
  const card=(l,r,v)=>`<div class="b"><div class="bl">${l}</div><div class="bn"><span class="dot" style="display:inline-block;background:${dot(r.agent)};vertical-align:middle"></span>${short(r.agent)}</div><div class="bv">${v}</div></div>`;
- const c=[];if(LIVE&&topR&&topR.ret_pct!=null)c.push(card('🥇 Top return',topR,pct(topR.ret_pct)));
- if(topM&&topM.chg24h!=null)c.push(card('🔥 Top mover 24h',topM,pct(topM.chg24h)));
+ const c=[];if(LIVE&&top&&winv(top)!=null)c.push(card('🥇 Top '+WINS[WIN],top,pct(winv(top))));
+ if(mov&&mov.win&&mov.win['24h']!=null)c.push(card('🔥 Top mover 24h',mov,pct(mov.win['24h'])));
  if(LIVE&&safe)c.push(card('🛡️ Lowest drawdown',safe,safe.dd_pct.toFixed(1)+'%'));
  $('badges').innerHTML=c.join('');}
-let key=LIVE?'ret_pct':'value',dir=-1;
+if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
 const cols=[['#','rank',1],['Agent','agent',0],['Chart','',0,'spk'],['Value','value',1],['PnL','ret_pct',1],['24h','chg24h',1,'c24'],['DQ risk','dd_pct',1,'dqcol']];
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
 function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
- return `<div class="rw"><div class="row ${r.rank<=3?'r'+r.rank:''}" onclick="this.nextElementSibling.classList.toggle('open')">
-  <div class="n">${r.rank}</div>
+ return `<div class="rw"><div class="row ${r._rk<=3?'r'+r._rk:''}" onclick="this.nextElementSibling.classList.toggle('open')">
+  <div class="n">${r._rk}</div>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
-  <div class="spk">${spark(r.spark)}</div><div class="vv">${fmt(r.value)}</div><div class="vv">${pct(r.ret_pct)}</div>
-  <div class="vv c24">${pct(r.chg24h)}</div><div class="dqcol">${dq(r.dd_pct||0)}</div></div>
+  <div class="spk">${spark(r.spark)}</div><div class="vv">${fmt(r.value)}</div><div class="vv">${pct(winv(r))}</div>
+  <div class="vv c24">${pct(r.win?r.win['24h']:r.chg24h)}</div><div class="dqcol">${dq(r.dd_pct||0)}</div></div>
   <div class="det"><div class="dethold">${h}</div></div></div>`;}
 function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
  const mv=parseFloat($('minv').value);if(!isNaN(mv))rs=rs.filter(r=>r.value>=mv);
- const f=$('flt').querySelector('button.on').dataset.v;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(r.ret_pct||0)>0);
- rs.sort((a,b)=>((a[key]??-1e9)-(b[key]??-1e9))*dir);
+ const f=$('flt').querySelector('button.on').dataset.v;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(winv(r)||0)>0);
+ rs.sort((a,b)=>{const av=key==='ret_pct'?(winv(a)??-1e9):(a[key]??-1e9),bv=key==='ret_pct'?(winv(b)??-1e9):(b[key]??-1e9);return (av-bv)*dir;});
  $('rows').innerHTML=rs.map(rowHTML).join('')||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
 $('q').oninput=render;$('minv').oninput=render;
 $('flt').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('flt').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');render();});
-render();
+$('wins').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('wins').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');WIN=b.dataset.w;ranks();stats();badges();render();});
+ranks();stats();badges();render();
 </script></body></html>"""
 
 html = TEMPLATE.replace("/*DATA*/", json.dumps(D))
