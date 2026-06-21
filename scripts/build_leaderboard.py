@@ -16,7 +16,7 @@ TEMPLATE = r"""<!doctype html><html lang="en"><head>
 <meta http-equiv="refresh" content="120"/>
 <title>BNB Hack · Track 1 Live Leaderboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#070809;--txt:#f2f4f8;--mut:#888f9c;--gold:#F0B90B;--gold2:#FCD535;--g:#1fd286;--r:#ff5470;
 --glass:rgba(255,255,255,.045);--glass2:rgba(255,255,255,.075);--line:rgba(255,255,255,.09);
@@ -33,9 +33,10 @@ background:
 .glass{background:var(--glass);backdrop-filter:blur(24px) saturate(155%);-webkit-backdrop-filter:blur(24px) saturate(155%);
  border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.06)}
 .hero{text-align:center;margin:2px 0 28px}
-.kick{display:inline-block;font:600 11px/1 var(--mono);letter-spacing:.32em;color:var(--gold);text-transform:uppercase;
- padding:8px 15px;border:1px solid rgba(240,185,11,.3);border-radius:999px;background:rgba(240,185,11,.06)}
-.h1{font:900 42px/1.03 "Inter";letter-spacing:-1.4px;margin:18px 0 9px;
+.mark{font:normal 22px/1.2 "Press Start 2P",monospace;color:var(--gold);letter-spacing:1px;
+ text-shadow:0 2px 24px rgba(240,185,11,.45),0 0 1px rgba(0,0,0,.4)}
+.ed{margin-top:13px;font:600 10.5px/1 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--mut)}
+.h1{font:900 42px/1.03 "Inter";letter-spacing:-1.4px;margin:16px 0 9px;
  background:linear-gradient(180deg,#fff,#c4c9d2);-webkit-background-clip:text;background-clip:text;color:transparent}
 .h1 b{background:linear-gradient(135deg,var(--gold2),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
 .spon{color:var(--mut);font-size:13px}
@@ -92,11 +93,12 @@ background:
 .foot{text-align:center;color:var(--mut);font-size:12px;margin-top:24px;line-height:1.9}.foot b{color:var(--txt)}
 .foot a{color:var(--gold2);text-decoration:none}.foot a:hover{text-decoration:underline}
 .by{margin-top:6px;font-size:12.5px}
-@media(max-width:680px){.h1{font-size:31px}.thead,.row{grid-template-columns:32px 1fr 76px 62px;gap:8px}
+@media(max-width:680px){.mark{font-size:15px}.h1{font-size:30px}.thead,.row{grid-template-columns:32px 1fr 76px 62px;gap:8px}
  .spk,.c24,.dqcol{display:none}.bad{grid-template-columns:1fr}.tools{flex-direction:column;align-items:stretch}#minv{width:100%}.seg{justify-content:center}}
 </style></head><body><div class="wrap">
 <div class="hero">
-  <div class="kick">BNB Hack · AI Trading Agent Edition</div>
+  <div class="mark">BNB HACK</div>
+  <div class="ed">AI Trading Agent Edition</div>
   <div class="h1">Track 1 · <b>Live Leaderboard</b></div>
   <div class="spon">CoinMarketCap × Trust Wallet × BNB Chain · $24,000 · top 5 win</div>
   <div class="cd" id="cd"></div>
