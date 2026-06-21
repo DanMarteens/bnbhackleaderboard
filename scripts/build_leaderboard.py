@@ -18,24 +18,27 @@ TEMPLATE = r"""<!doctype html><html lang="en"><head>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#070809;--txt:#f2f4f8;--mut:#888f9c;--gold:#F0B90B;--gold2:#FCD535;--g:#1fd286;--r:#ff5470;
---glass:rgba(255,255,255,.045);--glass2:rgba(255,255,255,.075);--line:rgba(255,255,255,.09);
---shadow:0 12px 44px rgba(0,0,0,.5);--mono:"JetBrains Mono",ui-monospace,monospace}
+:root{--bg:#080d24;--txt:#eef1f8;--mut:#8590ad;--gold:#F0B90B;--gold2:#FCD535;
+--blue:#3861FB;--purple:#9b6bff;--cyan:#3fd0e0;--g:#1fd286;--r:#ff5470;
+--glass:rgba(255,255,255,.04);--glass2:rgba(255,255,255,.07);--line:rgba(140,160,255,.13);
+--shadow:0 12px 46px rgba(0,0,0,.55);--mono:"JetBrains Mono",ui-monospace,monospace}
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 body{min-height:100vh;color:var(--txt);font:15px/1.55 "Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 background:
- radial-gradient(900px 520px at 12% -6%,rgba(240,185,11,.18),transparent 60%),
- radial-gradient(820px 620px at 92% 2%,rgba(120,110,255,.10),transparent 55%),
- radial-gradient(760px 760px at 50% 118%,rgba(240,185,11,.07),transparent 60%),
+ radial-gradient(820px 480px at 9% -8%,rgba(240,185,11,.15),transparent 56%),
+ radial-gradient(720px 560px at 48% -2%,rgba(155,107,255,.16),transparent 55%),
+ radial-gradient(840px 620px at 93% 3%,rgba(56,97,251,.18),transparent 55%),
+ radial-gradient(760px 760px at 50% 120%,rgba(63,208,224,.07),transparent 60%),
  var(--bg);background-attachment:fixed;padding:36px 16px 76px}
 .wrap{max-width:920px;margin:0 auto}
 .glass{background:var(--glass);backdrop-filter:blur(24px) saturate(155%);-webkit-backdrop-filter:blur(24px) saturate(155%);
  border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.06)}
 .hero{text-align:center;margin:2px 0 28px}
-.mark{font:normal 22px/1.2 "Press Start 2P",monospace;color:var(--gold);letter-spacing:1px;
- text-shadow:0 2px 24px rgba(240,185,11,.45),0 0 1px rgba(0,0,0,.4)}
-.ed{margin-top:13px;font:600 10.5px/1 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--mut)}
+.mark{font:normal 22px/1.3 "Press Start 2P",monospace;letter-spacing:1px;
+ background:linear-gradient(95deg,#F0B90B 0%,#ff7a45 22%,#ff4d9d 44%,#b14dff 64%,#5b8cff 82%,#36cfe6 100%);
+ -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 3px 22px rgba(155,107,255,.4))}
+.ed{margin-top:13px;font:600 10.5px/1 var(--mono);letter-spacing:.34em;text-transform:uppercase;color:var(--cyan)}
 .h1{font:900 42px/1.03 "Inter";letter-spacing:-1.4px;margin:16px 0 9px;
  background:linear-gradient(180deg,#fff,#c4c9d2);-webkit-background-clip:text;background-clip:text;color:transparent}
 .h1 b{background:linear-gradient(135deg,var(--gold2),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
