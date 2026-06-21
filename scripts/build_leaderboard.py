@@ -41,7 +41,16 @@ border-radius:12px;padding:11px 14px;margin:6px 0 16px;font-size:13px;color:var(
 .tools{display:flex;gap:10px;align-items:center;margin:0 0 10px}
 #q{flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--tx);padding:9px 13px;font:14px ui-monospace,monospace}
 #q::placeholder{color:var(--mut)}
+#minv,#flt{background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--tx);padding:9px 11px;font:13px ui-monospace,monospace}
+#minv{width:84px}
+.ext{color:var(--mut);text-decoration:none;font-size:12px;flex:none;margin-left:auto}.ext:hover{color:var(--gold)}
+.det{max-height:0;overflow:hidden;transition:max-height .25s ease;background:rgba(255,255,255,.02)}
+.det.open{max-height:160px;border-bottom:1px solid var(--line)}
+.dethold{display:flex;flex-wrap:wrap;gap:6px;padding:11px 16px}
+.chip{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font:600 11px/1 ui-monospace,monospace;color:var(--mut)}
+.chip b{color:var(--tx)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.row{cursor:pointer}
 .thead,.row{display:grid;grid-template-columns:38px 1.4fr 78px 86px 74px 66px 120px;align-items:center;gap:8px;padding:11px 16px}
 .thead{border-bottom:1px solid var(--line);font:700 10.5px/1 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
 .thead span{cursor:pointer;user-select:none}.thead span:hover{color:var(--tx)}
@@ -67,7 +76,11 @@ border-radius:12px;padding:11px 14px;margin:6px 0 16px;font-size:13px;color:var(
 <div class="stats" id="stats"></div>
 <div id="banner"></div>
 <div class="bad" id="badges"></div>
-<div class="tools"><input id="q" placeholder="search agent address…"/></div>
+<div class="tools">
+  <input id="q" placeholder="search agent address…"/>
+  <input id="minv" type="number" placeholder="min $"/>
+  <select id="flt"><option value="all">All</option><option value="funded">Funded</option><option value="profit">In profit</option></select>
+</div>
 <div class="card">
   <div class="thead" id="thead"></div>
   <div id="rows"></div>
@@ -123,18 +136,25 @@ let key=LIVE?'ret_pct':'value',dir=-1;
 const cols=[['#','rank',1],['Agent','agent',0],['Chart','',0,'spk'],['Value','value',1],['PnL','ret_pct',1],['24h','chg24h',1,'c24'],['DQ risk','dd_pct',1,'dqcol']];
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
-function render(){let rs=R.slice();const q=$('q').value.trim().toLowerCase();
- if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
- rs.sort((a,b)=>((a[key]??-1e9)-(b[key]??-1e9))*dir);
- $('rows').innerHTML=rs.map(r=>`<div class="row ${r.rank<=3?'r'+r.rank:''}">
+function rowHTML(r){
+ const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
+ return `<div class="rw"><div class="row ${r.rank<=3?'r'+r.rank:''}" onclick="this.nextElementSibling.classList.toggle('open')">
   <div class="n">${r.rank}</div>
-  <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span></div>
+  <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
+   <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="spk">${spark(r.spark)}</div>
   <div class="vv">${fmt(r.value)}</div>
   <div class="vv">${pct(r.ret_pct)}</div>
   <div class="vv c24">${pct(r.chg24h)}</div>
-  <div class="dqcol">${dq(r.dd_pct||0)}</div></div>`).join('');}
-$('q').oninput=render;render();
+  <div class="dqcol">${dq(r.dd_pct||0)}</div></div>
+  <div class="det"><div class="dethold">${h}</div></div></div>`;}
+function render(){let rs=R.slice();
+ const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
+ const mv=parseFloat($('minv').value);if(!isNaN(mv))rs=rs.filter(r=>r.value>=mv);
+ const f=$('flt').value;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(r.ret_pct||0)>0);
+ rs.sort((a,b)=>((a[key]??-1e9)-(b[key]??-1e9))*dir);
+ $('rows').innerHTML=rs.map(rowHTML).join('')||'<div style="padding:18px;text-align:center;color:var(--mut)">no agents match</div>';}
+$('q').oninput=render;$('minv').oninput=render;$('flt').onchange=render;render();
 </script></body></html>"""
 
 html = TEMPLATE.replace("/*DATA*/", json.dumps(D))

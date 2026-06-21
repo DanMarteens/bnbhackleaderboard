@@ -193,18 +193,23 @@ def multicall(pairs):
 
 
 def value_agents(agents, tokens, prices, decimals):
+    """Returns (totals{agent:usd}, holdings{agent:[[sym,usd], ...] top by value})."""
     syms = list(tokens)
     pairs = [(tokens[s], SEL_BAL + "0" * 24 + ag[2:]) for ag in agents for s in syms]
     res = multicall(pairs)
-    vals, k = {}, 0
+    vals, holds, k = {}, {}, 0
     for ag in agents:
-        tot = 0.0
+        tot, hh = 0.0, []
         for s in syms:
             r = res[k]; k += 1
             if r and r != "0x":
-                tot += (int(r, 16) / (10 ** decimals.get(s, 18))) * float(prices.get(s, 0) or 0)
+                usd = (int(r, 16) / (10 ** decimals.get(s, 18))) * float(prices.get(s, 0) or 0)
+                if usd > 0.01:
+                    tot += usd
+                    hh.append([s, round(usd, 2)])
         vals[ag] = round(tot, 2)
-    return vals
+        holds[ag] = sorted(hh, key=lambda x: -x[1])[:8]
+    return vals, holds
 
 
 def main():
@@ -219,7 +224,7 @@ def main():
     else:
         agents = json.load(open(PART_F))
     tokens, prices, decimals = load_tokens()
-    vals = value_agents(agents, tokens, prices, decimals)
+    vals, holds = value_agents(agents, tokens, prices, decimals)
 
     now = int(time.time())
 
@@ -271,7 +276,8 @@ def main():
         s = series(a); v = vals.get(a, 0.0); b = baseline.get(a)
         rows.append({"agent": a, "value": v,
                      "ret_pct": round((v / b - 1) * 100, 2) if (b and b > 0) else None,
-                     "chg24h": chg24h(s), "dd_pct": drawdown(s), "spark": spark(s)})
+                     "chg24h": chg24h(s), "dd_pct": drawdown(s), "spark": spark(s),
+                     "holds": holds.get(a, [])})
     rows.sort(key=lambda r: (r["ret_pct"] if r["ret_pct"] is not None else -1e9, r["value"]), reverse=True)
     for i, r in enumerate(rows):
         r["rank"] = i + 1
