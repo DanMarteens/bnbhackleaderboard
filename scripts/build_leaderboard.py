@@ -84,9 +84,11 @@ background:
 .thead .num,.row .num{text-align:right}
 .rw{border-bottom:1px solid rgba(255,255,255,.05)}.rw:last-child{border:0}
 .row{cursor:pointer;transition:background .15s}.row:hover{background:rgba(255,255,255,.035)}
-.row.r1,.row.r2,.row.r3{background:linear-gradient(90deg,rgba(240,185,11,.08),transparent 70%)}
+.row.r1,.row.r2,.row.r3{background:linear-gradient(90deg,rgba(240,185,11,.09),transparent 72%);box-shadow:inset 3px 0 0 var(--gold)}
+.row.r4,.row.r5{background:linear-gradient(90deg,rgba(240,185,11,.045),transparent 72%);box-shadow:inset 3px 0 0 rgba(240,185,11,.45)}
 .n{font:700 14px/1 var(--mono);color:var(--mut);text-align:center}
-.r1 .n{color:var(--gold)}.r2 .n{color:#d4d8df}.r3 .n{color:#e08a3c}
+.r1 .n{color:var(--gold)}.r2 .n{color:#d4d8df}.r3 .n{color:#e08a3c}.r4 .n,.r5 .n{color:var(--gold2)}
+.prize{font:700 9px/1 var(--mono);background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0a0a0a;border-radius:5px;padding:3px 6px;margin-left:7px;letter-spacing:.04em;flex:none}
 .ag{display:flex;align-items:center;gap:10px;min-width:0}
 .dot{width:22px;height:22px;border-radius:50%;flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
 .adr{font:500 12.5px/1 var(--mono);overflow:hidden;text-overflow:ellipsis}
@@ -153,6 +155,7 @@ function cd(){const n=Date.now();let t,l;if(n<START){t=START;l='Starts in';}else
 cd();setInterval(cd,60000);
 $('upd').textContent=new Date(D.built_ts*1000).toUTCString().replace('GMT','UTC');
 const WINS={'1h':'1H','12h':'12H','24h':'24H','day':'Day','all':'All'};
+const PRIZE={1:'$10k',2:'$6k',3:'$4k',4:'$2k',5:'$2k'};
 let WIN='all',key='ret_pct',dir=-1;
 const winv=r=>{const v=r.win?r.win[WIN]:r.ret_pct;return v==null?null:v;};
 function ranks(){R.slice().sort((a,b)=>((winv(b)??-1e9)-(winv(a)??-1e9))).forEach((r,i)=>r._rk=i+1);}
@@ -176,9 +179,10 @@ const cols=[['#','rank',1],['Agent','agent',0],['Chart','',0,'spk'],['Value','va
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
 function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
- return `<div class="rw"><div class="row ${r._rk<=3?'r'+r._rk:''}" onclick="this.nextElementSibling.classList.toggle('open')">
+ return `<div class="rw"><div class="row ${r._rk<=5?'r'+r._rk:''}" onclick="this.nextElementSibling.classList.toggle('open')">
   <div class="n">${r._rk}</div>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
+   ${WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="spk">${spark(r.spark)}</div><div class="vv">${fmt(r.value)}</div><div class="vv">${pct(winv(r))}</div>
   <div class="vv c24">${pct(r.win?r.win['24h']:r.chg24h)}</div><div class="dqcol">${dq(r.dd_pct||0)}</div></div>
