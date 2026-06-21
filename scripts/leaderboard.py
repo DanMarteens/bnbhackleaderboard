@@ -268,23 +268,17 @@ def external_flows(agents, from_block, tokens, prices, decimals):
             b = e + 1
             time.sleep(0.1)
 
-        # classify each non-agent counterparty as EOA (code == 0x) vs contract
-        cps = set()
-        for l in logs:
-            if len(l.get("topics", [])) < 3:
-                continue
-            frm, to = "0x" + l["topics"][1][-40:], "0x" + l["topics"][2][-40:]
-            cps.add(to if frm in agent_set else frm)
-        cps = list(cps)
-        is_eoa = {}
-        codes = rpc_batch([("eth_getCode", [c, "latest"]) for c in cps]) if cps else []
-        for c, r in zip(cps, codes):
-            is_eoa[c] = r in (None, "0x", "0x0", "")
-
+        # Classify per transaction: a tx where the agent BOTH receives and sends a token is a
+        # trade (swap / add-remove LP) -> not a capital flow. Inbound-only is a deposit;
+        # outbound-only is a withdrawal. This catches deposits routed through ANY contract
+        # (bridge, CEX, smart wallet), not just plain EOA sends -> much harder to game: to
+        # top up without it reading as inbound-only you'd have to give something away in the
+        # same tx.
         seen = set()
+        legs = {}                                  # (agent, txHash) -> [inbound_usd, outbound_usd]
         for l in logs:
             ident = (l.get("transactionHash"), l.get("logIndex"))
-            if ident in seen:                      # dedup (a self-transfer hits both queries)
+            if ident in seen:                      # dedup: a self-transfer hits both queries
                 continue
             seen.add(ident)
             if len(l.get("topics", [])) < 3:
@@ -294,17 +288,21 @@ def external_flows(agents, from_block, tokens, prices, decimals):
             if price <= 0:
                 continue
             try:
-                amt = int(l["data"], 16) / (10 ** decimals.get(sym, 18))
+                usd = int(l["data"], 16) / (10 ** decimals.get(sym, 18)) * price
             except Exception:
                 continue
-            usd = amt * price
             if usd <= 0:
                 continue
             frm, to = "0x" + l["topics"][1][-40:], "0x" + l["topics"][2][-40:]
-            if to in agent_set and frm not in agent_set and is_eoa.get(frm):
-                flows[to] = flows.get(to, 0.0) + usd          # deposit in
-            elif frm in agent_set and to not in agent_set and is_eoa.get(to):
-                flows[frm] = flows.get(frm, 0.0) - usd        # withdrawal out
+            h = l.get("transactionHash")
+            if to in agent_set and frm not in agent_set:
+                legs.setdefault((to, h), [0.0, 0.0])[0] += usd
+            elif frm in agent_set and to not in agent_set:
+                legs.setdefault((frm, h), [0.0, 0.0])[1] += usd
+        for (a, _), (inn, out) in legs.items():
+            if inn > 0 and out > 0:                # both legs in one tx -> swap/LP, trading
+                continue
+            flows[a] = flows.get(a, 0.0) + (inn - out)   # inbound-only=deposit, outbound-only=withdrawal
         flows = {a: round(flows.get(a, 0.0), 2) for a in agents}
         json.dump(flows, open(FLOWS_F, "w"))
         return flows
