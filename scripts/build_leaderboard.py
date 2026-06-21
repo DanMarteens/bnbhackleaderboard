@@ -1,71 +1,97 @@
 #!/usr/bin/env python3
-"""Render leaderboard.json into a BNB-Hack-styled static page (Cloudflare/GitHub Pages).
+"""Render leaderboard.json into a premium glassmorphism BNB-Hack page (Cloudflare/Pages).
   python scripts/build_leaderboard.py <leaderboard.json> <out.html>
 """
-import json, sys, time
+import json, sys, time, os
 
 src = sys.argv[1] if len(sys.argv) > 1 else "dashboard/leaderboard.json"
 out = sys.argv[2] if len(sys.argv) > 2 else "leaderboard-site/public/index.html"
 D = json.load(open(src))
 D["built_ts"] = int(time.time())
-for r in D.get("rows", []):       # public, neutral: never reveal which agent is ours
+for r in D.get("rows", []):
     r.pop("ours", None)
 
 TEMPLATE = r"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta http-equiv="refresh" content="120"/>
 <title>BNB Hack · Track 1 Live Leaderboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0b0e11;--card:#161a1e;--line:rgba(255,255,255,.06);--gold:#F0B90B;--gold2:#FCD535;
---g:#16c784;--r:#ea3943;--tx:#eaecef;--mut:#848e9c}
+:root{--bg:#070809;--txt:#f2f4f8;--mut:#888f9c;--gold:#F0B90B;--gold2:#FCD535;--g:#1fd286;--r:#ff5470;
+--glass:rgba(255,255,255,.045);--glass2:rgba(255,255,255,.075);--line:rgba(255,255,255,.09);
+--shadow:0 12px 44px rgba(0,0,0,.5);--mono:"JetBrains Mono",ui-monospace,monospace}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:radial-gradient(1200px 600px at 50% -10%,#1a1d22 0%,var(--bg) 55%);color:var(--tx);
-font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:26px 14px 60px}
-.wrap{max-width:880px;margin:0 auto}
-.hero{text-align:center;margin:6px 0 18px}
-.kick{font:700 12px/1 ui-monospace,monospace;letter-spacing:.3em;color:var(--gold);text-transform:uppercase}
-.h1{font:800 32px/1.05 sans-serif;margin:9px 0 6px;letter-spacing:-.5px}.h1 b{color:var(--gold)}
-.spon{color:var(--mut);font-size:12.5px}
-.cd{margin:12px auto 0;display:inline-block;background:var(--card);border:1px solid var(--line);
-border-radius:999px;padding:7px 16px;font:600 13px/1 ui-monospace,monospace;color:var(--gold2)}
-.cd b{color:var(--tx)}
-.stats{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:18px 0}
-.st{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 18px;text-align:center;min-width:96px}
-.st .stv{font:800 19px/1 ui-monospace,monospace}.st .stk{color:var(--mut);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;margin-top:5px}
-.banner{background:linear-gradient(90deg,rgba(240,185,11,.12),rgba(240,185,11,.02));border:1px solid rgba(240,185,11,.25);
-border-radius:12px;padding:11px 14px;margin:6px 0 16px;font-size:13px;color:var(--gold2);text-align:center}
-.bad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 18px}
-.b{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px}
-.b .bl{font:700 10px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
-.b .bn{font:600 13px/1 ui-monospace,monospace;margin:7px 0 4px}.b .bv{font:800 15px/1 ui-monospace,monospace}
-.tools{display:flex;gap:10px;align-items:center;margin:0 0 10px}
-#q{flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--tx);padding:9px 13px;font:14px ui-monospace,monospace}
-#q::placeholder{color:var(--mut)}
-#minv,#flt{background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--tx);padding:9px 11px;font:13px ui-monospace,monospace}
-#minv{width:84px}
-.ext{color:var(--mut);text-decoration:none;font-size:12px;flex:none;margin-left:auto}.ext:hover{color:var(--gold)}
-.det{max-height:0;overflow:hidden;transition:max-height .25s ease;background:rgba(255,255,255,.02)}
-.det.open{max-height:160px;border-bottom:1px solid var(--line)}
-.dethold{display:flex;flex-wrap:wrap;gap:6px;padding:11px 16px}
-.chip{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font:600 11px/1 ui-monospace,monospace;color:var(--mut)}
-.chip b{color:var(--tx)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-.row{cursor:pointer}
-.thead,.row{display:grid;grid-template-columns:38px 1.4fr 78px 86px 74px 66px 120px;align-items:center;gap:8px;padding:11px 16px}
-.thead{border-bottom:1px solid var(--line);font:700 10.5px/1 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
-.thead span{cursor:pointer;user-select:none}.thead span:hover{color:var(--tx)}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{min-height:100vh;color:var(--txt);font:15px/1.55 "Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+background:
+ radial-gradient(900px 520px at 12% -6%,rgba(240,185,11,.18),transparent 60%),
+ radial-gradient(820px 620px at 92% 2%,rgba(120,110,255,.10),transparent 55%),
+ radial-gradient(760px 760px at 50% 118%,rgba(240,185,11,.07),transparent 60%),
+ var(--bg);background-attachment:fixed;padding:36px 16px 76px}
+.wrap{max-width:920px;margin:0 auto}
+.glass{background:var(--glass);backdrop-filter:blur(24px) saturate(155%);-webkit-backdrop-filter:blur(24px) saturate(155%);
+ border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.06)}
+.hero{text-align:center;margin:2px 0 28px}
+.kick{display:inline-block;font:600 11px/1 var(--mono);letter-spacing:.32em;color:var(--gold);text-transform:uppercase;
+ padding:8px 15px;border:1px solid rgba(240,185,11,.3);border-radius:999px;background:rgba(240,185,11,.06)}
+.h1{font:900 42px/1.03 "Inter";letter-spacing:-1.4px;margin:18px 0 9px;
+ background:linear-gradient(180deg,#fff,#c4c9d2);-webkit-background-clip:text;background-clip:text;color:transparent}
+.h1 b{background:linear-gradient(135deg,var(--gold2),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+.spon{color:var(--mut);font-size:13px}
+.cd{margin-top:18px;display:inline-flex;gap:9px;align-items:center;padding:10px 20px;border-radius:999px;
+ font:600 13px/1 var(--mono);color:var(--gold2);background:var(--glass);border:1px solid var(--line);
+ backdrop-filter:blur(12px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.cd::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--g);box-shadow:0 0 10px var(--g);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}.cd b{color:#fff}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:12px;margin:26px 0}
+.st{padding:17px 14px;text-align:center;background:var(--glass);border:1px solid var(--line);border-radius:18px;
+ backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.st .v{font:800 23px/1 "Inter";letter-spacing:-.6px;background:linear-gradient(135deg,#fff,#a9afbc);-webkit-background-clip:text;background-clip:text;color:transparent}
+.st .k{color:var(--mut);font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-top:7px}
+.banner{padding:13px 16px;margin:0 0 18px;font-size:13px;color:var(--gold2);text-align:center;border-radius:16px;
+ background:linear-gradient(90deg,rgba(240,185,11,.1),rgba(240,185,11,.02));border:1px solid rgba(240,185,11,.25)}
+.bad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 22px}
+.b{padding:16px;background:var(--glass);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(20px);
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:transform .2s}.b:hover{transform:translateY(-3px)}
+.b .bl{font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.b .bn{font:600 13px/1 var(--mono);margin:10px 0 6px;display:flex;align-items:center;gap:7px}
+.b .bv{font:800 18px/1 "Inter"}
+.tools{display:flex;gap:10px;align-items:center;margin:24px 0 14px;flex-wrap:wrap}
+.inp{background:var(--glass);border:1px solid var(--line);border-radius:14px;color:var(--txt);padding:12px 16px;
+ font:14px "Inter";backdrop-filter:blur(14px);outline:none;transition:.2s;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.inp::placeholder{color:var(--mut)}.inp:focus{border-color:rgba(240,185,11,.6);box-shadow:0 0 0 3px rgba(240,185,11,.13)}
+#q{flex:1;min-width:170px}#minv{width:118px}#minv::-webkit-outer-spin-button,#minv::-webkit-inner-spin-button{-webkit-appearance:none}
+.seg{display:inline-flex;background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:4px;gap:3px;backdrop-filter:blur(14px)}
+.seg button{border:0;background:transparent;color:var(--mut);font:600 13px "Inter";padding:9px 15px;border-radius:11px;cursor:pointer;transition:.18s}
+.seg button:hover{color:var(--txt)}
+.seg button.on{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0a0a0a;box-shadow:0 4px 16px rgba(240,185,11,.35)}
+.tbl{overflow:hidden;background:var(--glass);border:1px solid var(--line);border-radius:20px;backdrop-filter:blur(24px);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.06)}
+.thead,.row{display:grid;grid-template-columns:44px 1.5fr 82px 94px 78px 70px 122px;align-items:center;gap:10px;padding:14px 18px}
+.thead{border-bottom:1px solid var(--line);font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.thead span{cursor:pointer;transition:.15s}.thead span:hover{color:var(--gold2)}
 .thead .num,.row .num{text-align:right}
-.row{border-bottom:1px solid var(--line);font-size:13px}.row:last-child{border:0}
-.row .n{font:700 13px/1 ui-monospace,monospace;color:var(--mut);text-align:center}
-.row .top1 .n,.row.r1 .n{color:var(--gold)}
-.ag{display:flex;align-items:center;gap:9px;min-width:0}
-.dot{width:20px;height:20px;border-radius:50%;flex:none}.adr{font:500 12.5px/1 ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis}
-.vv{font:700 13px/1 ui-monospace,monospace;text-align:right}
+.rw{border-bottom:1px solid rgba(255,255,255,.05)}.rw:last-child{border:0}
+.row{cursor:pointer;transition:background .15s}.row:hover{background:rgba(255,255,255,.035)}
+.row.r1,.row.r2,.row.r3{background:linear-gradient(90deg,rgba(240,185,11,.08),transparent 70%)}
+.n{font:700 14px/1 var(--mono);color:var(--mut);text-align:center}
+.r1 .n{color:var(--gold)}.r2 .n{color:#d4d8df}.r3 .n{color:#e08a3c}
+.ag{display:flex;align-items:center;gap:10px;min-width:0}
+.dot{width:22px;height:22px;border-radius:50%;flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.adr{font:500 12.5px/1 var(--mono);overflow:hidden;text-overflow:ellipsis}
+.ext{margin-left:auto;color:var(--mut);text-decoration:none;font-size:13px;opacity:.55;transition:.15s}.ext:hover{color:var(--gold);opacity:1}
+.vv{font:700 13px/1 var(--mono);text-align:right}
 .pos{color:var(--g)}.neg{color:var(--r)}.zero{color:var(--mut)}
-.dqwrap{height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;flex:1}
-.dqcell{display:flex;align-items:center;gap:7px}.dqv{font:600 11px/1 ui-monospace,monospace;color:var(--mut);width:40px;text-align:right}
-.foot{text-align:center;color:var(--mut);font-size:12px;margin-top:22px;line-height:1.7}.foot b{color:var(--tx)}
-@media(max-width:680px){.thead,.row{grid-template-columns:30px 1fr 70px 60px;}.spk,.c24,.dqcol{display:none}}
+.dqcell{display:flex;align-items:center;gap:8px}
+.dqwrap{height:6px;flex:1;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden}
+.dqv{font:600 11px/1 var(--mono);color:var(--mut);width:36px;text-align:right}
+.det{max-height:0;overflow:hidden;transition:max-height .3s ease}.det.open{max-height:200px}
+.dethold{display:flex;flex-wrap:wrap;gap:7px;padding:2px 18px 15px}
+.chip{background:var(--glass2);border:1px solid var(--line);border-radius:10px;padding:5px 11px;font:600 11px/1 var(--mono);color:var(--mut)}
+.chip b{color:var(--gold2)}
+.foot{text-align:center;color:var(--mut);font-size:12px;margin-top:24px;line-height:1.8}.foot b{color:var(--txt)}
+@media(max-width:680px){.h1{font-size:31px}.thead,.row{grid-template-columns:32px 1fr 76px 62px;gap:8px}
+ .spk,.c24,.dqcol{display:none}.bad{grid-template-columns:1fr}.tools{flex-direction:column;align-items:stretch}#minv{width:100%}.seg{justify-content:center}}
 </style></head><body><div class="wrap">
 <div class="hero">
   <div class="kick">BNB Hack · AI Trading Agent Edition</div>
@@ -77,87 +103,72 @@ border-radius:12px;padding:11px 14px;margin:6px 0 16px;font-size:13px;color:var(
 <div id="banner"></div>
 <div class="bad" id="badges"></div>
 <div class="tools">
-  <input id="q" placeholder="search agent address…"/>
-  <input id="minv" type="number" placeholder="min $"/>
-  <select id="flt"><option value="all">All</option><option value="funded">Funded</option><option value="profit">In profit</option></select>
+  <input id="q" class="inp" placeholder="search agent address…"/>
+  <input id="minv" class="inp" type="number" placeholder="min $"/>
+  <div class="seg" id="flt">
+    <button data-v="all" class="on">All</button>
+    <button data-v="funded">Funded</button>
+    <button data-v="profit">In&nbsp;profit</button>
+  </div>
 </div>
-<div class="card">
-  <div class="thead" id="thead"></div>
-  <div id="rows"></div>
+<div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
+<div class="foot">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
+  Updated <span id="upd"></span> · refreshes every ~30 min · community-built, not affiliated with organizers.</div>
 </div>
-<div class="foot">
-  Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
-  Updated <span id="upd"></span> · refreshes every ~30 min · community-built, not affiliated with organizers.
-</div></div>
 <script>
 const D=/*DATA*/, R=D.rows||[], S=D.stats||{}, LIVE=D.has_baseline;
 const $=id=>document.getElementById(id);
 const short=a=>a.slice(0,6)+"…"+a.slice(-4);
-const dot=a=>{let h=0;for(let i=2;i<10;i++)h=(h*31+a.charCodeAt(i))>>>0;return `hsl(${h%360} 70% 55%)`;};
+const dot=a=>{let h=0;for(let i=2;i<10;i++)h=(h*31+a.charCodeAt(i))>>>0;return `hsl(${h%360} 72% 56%)`;};
 const fmt=v=>"$"+(v>=1000?Math.round(v).toLocaleString():v.toFixed(2));
 const pct=v=>v==null?'<span class="zero">—</span>':`<span class="${v>0?'pos':v<0?'neg':'zero'}">${v>0?'+':''}${v.toFixed(2)}%</span>`;
 function spark(a){if(!a||a.length<2)return '';const w=72,h=20,mn=Math.min(...a),mx=Math.max(...a),rg=(mx-mn)||1;
  const p=a.map((v,i)=>`${(i/(a.length-1)*w).toFixed(1)},${(h-(v-mn)/rg*h).toFixed(1)}`).join(' ');
- return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${p}" fill="none" stroke="${a[a.length-1]>=a[0]?'var(--g)':'var(--r)'}" stroke-width="1.5"/></svg>`;}
+ return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${p}" fill="none" stroke="${a[a.length-1]>=a[0]?'var(--g)':'var(--r)'}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;}
 function dq(dd){const p=Math.min(100,dd/30*100),c=p<40?'var(--g)':p<70?'var(--gold)':'var(--r)';
  return `<div class="dqcell"><div class="dqwrap"><div style="height:100%;width:${p}%;background:${c}"></div></div><span class="dqv">${dd.toFixed(0)}%</span></div>`;}
-
-// countdown
 const START=Date.UTC(2026,5,22),END=Date.UTC(2026,5,29);
 function cd(){const n=Date.now();let t,l;if(n<START){t=START;l='Starts in';}else if(n<END){t=END;l='Time left';}else{$('cd').textContent='Competition ended';return;}
- const d=Math.max(0,t-n);$('cd').innerHTML=`${l}: <b>${Math.floor(d/864e5)}d ${Math.floor(d%864e5/36e5)}h ${Math.floor(d%36e5/6e4)}m</b>`;}
+ const d=Math.max(0,t-n);$('cd').innerHTML=`${l} &nbsp;<b>${Math.floor(d/864e5)}d ${Math.floor(d%864e5/36e5)}h ${Math.floor(d%36e5/6e4)}m</b>`;}
 cd();setInterval(cd,60000);
 $('upd').textContent=new Date(D.built_ts*1000).toUTCString().replace('GMT','UTC');
-
-// field stats
 $('stats').innerHTML=[['Agents',S.n],['Funded',S.funded],['Deployed',fmt(S.deployed||0)],
  LIVE?['In profit',S.in_profit]:null,LIVE?['Avg PnL',(S.avg_ret>=0?'+':'')+S.avg_ret+'%']:null,
  LIVE?['Survivors',S.survivors+'/'+S.n]:null].filter(Boolean)
- .map(([k,v])=>`<div class="st"><div class="stv">${v}</div><div class="stk">${k}</div></div>`).join('');
-
+ .map(([k,v])=>`<div class="st"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
 if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
-
-// badges (need movement data)
 const funded=R.filter(r=>r.value>0);
-function pick(arr,key,dir){return arr.slice().sort((a,b)=>((b[key]??-1e9)-(a[key]??-1e9))*dir)[0];}
-if(funded.length){
- const topR=pick(funded,'ret_pct',1),topM=pick(funded,'chg24h',1),safe=funded.slice().sort((a,b)=>a.dd_pct-b.dd_pct)[0];
- const card=(l,r,v)=>`<div class="b"><div class="bl">${l}</div><div class="bn"><span class="dot" style="display:inline-block;background:${dot(r.agent)};vertical-align:middle"></span> ${short(r.agent)}</div><div class="bv">${v}</div></div>`;
- const cards=[];
- if(LIVE&&topR&&topR.ret_pct!=null)cards.push(card('🥇 Top return',topR,pct(topR.ret_pct)));
- if(topM&&topM.chg24h!=null)cards.push(card('🔥 Top mover 24h',topM,pct(topM.chg24h)));
- if(LIVE&&safe)cards.push(card('🛡️ Lowest drawdown',safe,safe.dd_pct.toFixed(1)+'%'));
- $('badges').innerHTML=cards.join('');
-}
-
-// table
+if(funded.length){const pk=(k,d)=>funded.slice().sort((a,b)=>((b[k]??-1e9)-(a[k]??-1e9))*d)[0];
+ const topR=pk('ret_pct',1),topM=pk('chg24h',1),safe=funded.slice().sort((a,b)=>a.dd_pct-b.dd_pct)[0];
+ const card=(l,r,v)=>`<div class="b"><div class="bl">${l}</div><div class="bn"><span class="dot" style="display:inline-block;background:${dot(r.agent)};vertical-align:middle"></span>${short(r.agent)}</div><div class="bv">${v}</div></div>`;
+ const c=[];if(LIVE&&topR&&topR.ret_pct!=null)c.push(card('🥇 Top return',topR,pct(topR.ret_pct)));
+ if(topM&&topM.chg24h!=null)c.push(card('🔥 Top mover 24h',topM,pct(topM.chg24h)));
+ if(LIVE&&safe)c.push(card('🛡️ Lowest drawdown',safe,safe.dd_pct.toFixed(1)+'%'));
+ $('badges').innerHTML=c.join('');}
 let key=LIVE?'ret_pct':'value',dir=-1;
 const cols=[['#','rank',1],['Agent','agent',0],['Chart','',0,'spk'],['Value','value',1],['PnL','ret_pct',1],['24h','chg24h',1,'c24'],['DQ risk','dd_pct',1,'dqcol']];
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
-function rowHTML(r){
- const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
+function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
  return `<div class="rw"><div class="row ${r.rank<=3?'r'+r.rank:''}" onclick="this.nextElementSibling.classList.toggle('open')">
   <div class="n">${r.rank}</div>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
-  <div class="spk">${spark(r.spark)}</div>
-  <div class="vv">${fmt(r.value)}</div>
-  <div class="vv">${pct(r.ret_pct)}</div>
-  <div class="vv c24">${pct(r.chg24h)}</div>
-  <div class="dqcol">${dq(r.dd_pct||0)}</div></div>
+  <div class="spk">${spark(r.spark)}</div><div class="vv">${fmt(r.value)}</div><div class="vv">${pct(r.ret_pct)}</div>
+  <div class="vv c24">${pct(r.chg24h)}</div><div class="dqcol">${dq(r.dd_pct||0)}</div></div>
   <div class="det"><div class="dethold">${h}</div></div></div>`;}
 function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
  const mv=parseFloat($('minv').value);if(!isNaN(mv))rs=rs.filter(r=>r.value>=mv);
- const f=$('flt').value;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(r.ret_pct||0)>0);
+ const f=$('flt').querySelector('button.on').dataset.v;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(r.ret_pct||0)>0);
  rs.sort((a,b)=>((a[key]??-1e9)-(b[key]??-1e9))*dir);
- $('rows').innerHTML=rs.map(rowHTML).join('')||'<div style="padding:18px;text-align:center;color:var(--mut)">no agents match</div>';}
-$('q').oninput=render;$('minv').oninput=render;$('flt').onchange=render;render();
+ $('rows').innerHTML=rs.map(rowHTML).join('')||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
+$('q').oninput=render;$('minv').oninput=render;
+$('flt').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('flt').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');render();});
+render();
 </script></body></html>"""
 
 html = TEMPLATE.replace("/*DATA*/", json.dumps(D))
-import os
 os.makedirs(os.path.dirname(out), exist_ok=True)
 open(out, "w").write(html)
 print("wrote", out, "(", len(html), "bytes,", len(D.get("rows", [])), "rows )")
