@@ -74,21 +74,29 @@ def call_data(to, data):
     return ("eth_call", [{"to": to, "data": data}, "latest"])
 
 
-def enumerate_participants(start=104900000, step=40000):
+def enumerate_participants(start=104800000, step=40000):
     latest = int(rpc("eth_blockNumber", []), 16)
-    parts, b = [], start
-    while b <= latest:
-        e = min(b + step, latest)
-        for _ in range(3):
+
+    def grab(b, e, depth=0):
+        # retry, then split the range on persistent error -> never silently skip blocks
+        for _ in range(4):
             g = _post({"jsonrpc": "2.0", "id": 1, "method": "eth_getLogs",
                        "params": [{"address": COMP, "topics": [TOPIC_REG],
                                    "fromBlock": hex(b), "toBlock": hex(e)}]})
             if "error" not in g:
-                for l in g["result"]:
-                    parts.append("0x" + l["topics"][1][-40:])
-                break
-            time.sleep(1)
+                return ["0x" + l["topics"][1][-40:] for l in g["result"]]
+            time.sleep(1.5)
+        if b < e and depth < 14:
+            mid = (b + e) // 2
+            return grab(b, mid, depth + 1) + grab(mid + 1, e, depth + 1)
+        return []
+
+    parts, b = [], start
+    while b <= latest:
+        e = min(b + step, latest)
+        parts += grab(b, e)
         b = e + 1
+        time.sleep(0.15)
     uniq = sorted(set(parts))
     json.dump(uniq, open(PART_F, "w"))
     return uniq
@@ -223,6 +231,13 @@ def main():
         agents = enumerate_participants()
     else:
         agents = json.load(open(PART_F))
+    # Merge a manual allowlist: some registrations don't emit a catchable Registered
+    # event, so reported-missing (but on-chain isRegistered=true) agents go here.
+    try:
+        extra = json.load(open(os.path.join(ROOT, "dashboard", "extra_participants.json")))
+        agents = sorted(set(a.lower() for a in agents) | set(a.lower() for a in extra))
+    except Exception:
+        pass
     tokens, prices, decimals = load_tokens()
     vals, holds = value_agents(agents, tokens, prices, decimals)
 
