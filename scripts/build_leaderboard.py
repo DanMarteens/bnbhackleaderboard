@@ -89,7 +89,9 @@ background:
 .dethold{display:flex;flex-wrap:wrap;gap:7px;padding:2px 18px 15px}
 .chip{background:var(--glass2);border:1px solid var(--line);border-radius:10px;padding:5px 11px;font:600 11px/1 var(--mono);color:var(--mut)}
 .chip b{color:var(--gold2)}
-.foot{text-align:center;color:var(--mut);font-size:12px;margin-top:24px;line-height:1.8}.foot b{color:var(--txt)}
+.foot{text-align:center;color:var(--mut);font-size:12px;margin-top:24px;line-height:1.9}.foot b{color:var(--txt)}
+.foot a{color:var(--gold2);text-decoration:none}.foot a:hover{text-decoration:underline}
+.by{margin-top:6px;font-size:12.5px}
 @media(max-width:680px){.h1{font-size:31px}.thead,.row{grid-template-columns:32px 1fr 76px 62px;gap:8px}
  .spk,.c24,.dqcol{display:none}.bad{grid-template-columns:1fr}.tools{flex-direction:column;align-items:stretch}#minv{width:100%}.seg{justify-content:center}}
 </style></head><body><div class="wrap">
@@ -113,7 +115,10 @@ background:
 </div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
 <div class="foot">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
-  Updated <span id="upd"></span> · refreshes every ~30 min · community-built, not affiliated with organizers.</div>
+  Updated <span id="upd"></span> · refreshes every ~30 min · not affiliated with organizers.
+  <div class="by">built by <b><a href="https://x.com/itsabigdill" target="_blank" rel="noopener">@itsabigdill</a></b>
+   · <a href="https://github.com/DanMarteens" target="_blank" rel="noopener">github</a>
+   · <a href="https://cto.monster" target="_blank" rel="noopener">cto.monster</a></div></div>
 </div>
 <script>
 const D=/*DATA*/, R=D.rows||[], S=D.stats||{}, LIVE=D.has_baseline;
