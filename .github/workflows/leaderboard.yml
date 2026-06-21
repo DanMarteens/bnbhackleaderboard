@@ -44,5 +44,14 @@ jobs:
           path: public
       - id: deploy
         uses: actions/deploy-pages@v4
-
-# trigger registration
+      - name: Deploy to Cloudflare Pages (canonical bnbhackleaderboard.pages.dev)
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: "f12343f4f5f0d268f6c7df8d23a15859"
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            npx -y wrangler@latest pages deploy public --project-name=bnbhackleaderboard --branch=main --commit-dirty=true
+          else
+            echo "CLOUDFLARE_API_TOKEN secret not set -> skipping pages.dev deploy (GitHub Pages still updated)"
+          fi
