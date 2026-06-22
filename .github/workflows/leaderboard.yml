@@ -36,7 +36,10 @@ jobs:
             echo "daily re-enumeration of registrants"
             FLAGS="$FLAGS --enumerate"
           fi
-          if [ ! -f dashboard/lb_baseline.json ] && [ "$NOW" -ge "$GO_LIVE" ]; then
+          # Snapshot the baseline ONLY in the first 30 min after go-live. The frozen
+          # baseline is committed to the repo, so this should never fire; the time guard
+          # ensures a missing file later can't silently re-baseline (which would peg PnL to 0).
+          if [ ! -f dashboard/lb_baseline.json ] && [ "$NOW" -ge "$GO_LIVE" ] && [ $((NOW - GO_LIVE)) -lt 1800 ]; then
             echo "Competition open + no baseline yet -> snapshotting go-live baseline"
             FLAGS="$FLAGS --baseline"
           fi
@@ -46,9 +49,13 @@ jobs:
         run: |
           git config user.name "leaderboard-bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dashboard/history.json dashboard/lb_baseline.json dashboard/participants.json dashboard/golive.json dashboard/flows.json 2>/dev/null || true
+          git add -A dashboard/ 2>/dev/null || true   # all state files (gitignore excludes leaderboard.json/lb_decimals.json)
           git commit -m "snapshot [skip ci]" || true
-          git push || true
+          # rebase + retry so a concurrent push never drops the commit (the old `git push || true`
+          # was silently failing on non-fast-forward, so history/baseline never persisted).
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push && { echo "pushed"; break; } || { echo "push retry $i"; sleep 4; }
+          done
       - name: Build page
         run: python scripts/build_leaderboard.py dashboard/leaderboard.json public/index.html
       - uses: actions/upload-pages-artifact@v3

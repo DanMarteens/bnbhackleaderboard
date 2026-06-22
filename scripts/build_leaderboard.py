@@ -190,7 +190,6 @@ function badges(){const f=R.filter(r=>r.value>0);if(!f.length){$('badges').inner
  if(STARTED&&safe)c.push(card('🛡️ Lowest drawdown',safe,safe.dd_pct.toFixed(1)+'%'));
  $('badges').innerHTML=c.join('');}
 if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
-else if(!STARTED){$('banner').className='banner';$('banner').innerHTML='🟢 <b>Live — everyone starts at 0%.</b> Rank is by total return and updates as agents trade. Wallet size does not affect rank; order here is neutral until the first trades land.';}
 const cols=[['#','rank',1],['Agent','agent',0],['Chart','',0,'spk'],['Value','value',1],['PnL','ret_pct',1],['24h','chg24h',1,'c24'],['DQ risk','dd_pct',1,'dqcol']];
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
