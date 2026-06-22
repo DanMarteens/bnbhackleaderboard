@@ -38,6 +38,7 @@ OUT_F = os.path.join(ROOT, "dashboard", "leaderboard.json")
 HIST_F = os.path.join(ROOT, "dashboard", "history.json")
 GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} captured at baseline
 FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
+LAZY_F = os.path.join(ROOT, "dashboard", "lb_lazy.json")    # late-funders' first-funded baseline
 MAXHIST = 400          # ~8 days at 30-min cadence
 MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
 DQ = 0.30              # disqualification drawdown line
@@ -531,6 +532,8 @@ def main():
     vals, holds = value_agents(agents, tokens, prices, decimals)
 
     now = int(time.time())
+    baseline = {}
+    funded_credit = {}          # per-agent: initial funding that set a lazy baseline (not a deposit)
 
     if do_baseline:
         json.dump(vals, open(BASE_F, "w")); baseline = vals
@@ -541,21 +544,32 @@ def main():
             pass
     else:
         try:
-            baseline = json.load(open(BASE_F))
+            golive_base = json.load(open(BASE_F))     # IMMUTABLE go-live snapshot (never rewritten)
         except Exception:
-            baseline = {}
-        # Lazy baseline for agents funded only AFTER go-live (go-live value ~0 -> return is
-        # undefined). Freeze their baseline at the first funded snapshot so they're ranked
-        # on return-since-funding instead of showing "—". Set once, then persisted.
+            golive_base = {}
+        try:
+            lazy = json.load(open(LAZY_F))
+        except Exception:
+            lazy = {}
+        # Late funders (go-live value < MINCAP) get their baseline anchored to the FIRST funded
+        # snapshot. Crucially we ALSO remember that funding amount (funded_credit) so it is NOT
+        # double-counted as a deposit later — the double-count was showing them at -100%.
         changed = False
         for a in agents:
-            if (baseline.get(a, 0) or 0) < MINCAP and vals.get(a, 0) >= MINCAP:
-                baseline[a] = vals.get(a, 0); changed = True
+            if (golive_base.get(a, 0) or 0) < MINCAP and vals.get(a, 0) >= MINCAP and a not in lazy:
+                lazy[a] = vals.get(a, 0); changed = True
         if changed:
             try:
-                json.dump(baseline, open(BASE_F, "w"))
+                json.dump(lazy, open(LAZY_F, "w"))
             except Exception:
                 pass
+        for a in agents:
+            gb = golive_base.get(a, 0) or 0
+            if gb >= MINCAP:
+                baseline[a] = gb
+            else:
+                baseline[a] = lazy.get(a, gb)
+                funded_credit[a] = max(0.0, baseline[a] - gb)   # exclude initial funding from deposits
 
     # ---- one on-chain pass: net deposits (capital base) + who traded today ----
     flows = {a: 0.0 for a in agents}
@@ -653,11 +667,11 @@ def main():
 
     rows = []
     for a in agents:
-        s = series(a); v = vals.get(a, 0.0); b = baseline.get(a) or 0.0; f = flows.get(a, 0.0)
-        # Deposit-INVARIANT return: measured against the fixed go-live stake, with external
-        # deposits/withdrawals removed from value. A top-up adds equally to value and to f,
-        # so (v - f) is unchanged and the denominator is fixed -> PnL doesn't move at all.
-        # (Agents funded only after the go-live snapshot have b < MINCAP -> shown as "—".)
+        s = series(a); v = vals.get(a, 0.0); b = baseline.get(a) or 0.0
+        # Deposit-INVARIANT return vs the fixed go-live (or first-funded) stake, with external
+        # deposits/withdrawals removed. funded_credit nets out the initial funding that ESTABLISHED
+        # a late funder's baseline, so it isn't also subtracted as a deposit (the -100% bug).
+        f = flows.get(a, 0.0) - funded_credit.get(a, 0.0)
         allret = round(((v - f) / b - 1) * 100, 2) if b > MINCAP else None
         win = {"1h": winret(s, 3600), "24h": winret(s, 86400), "all": allret}
         for n in range(1, HACK_DAYS + 1):
