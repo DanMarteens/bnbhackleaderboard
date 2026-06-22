@@ -583,13 +583,30 @@ def main():
         # without an "f" field predate the event, where flow is 0 anyway.
         return [(h["ts"], h["v"].get(a, 0.0) - h.get("f", {}).get(a, 0.0)) for h in hist]
 
-    def drawdown(s):
-        peak = dd = 0.0
-        for _, v in s:
-            peak = max(peak, v)
-            if peak > 0:
-                dd = max(dd, (peak - v) / peak)
-        return round(dd * 100, 2)
+    def drawdown(a):
+        # Max peak-to-trough decline of portfolio VALUE, with the peak REBASED whenever external
+        # capital moves (a deposit lifts value, a withdrawal drops it — neither is a trading loss).
+        # Computing on value (not the deposit-adjusted dollar series, which hovers near zero and
+        # blew the % into the thousands) keeps it bounded; rebasing on flow changes stops deposits
+        # from registering as drawdown. Real price declines, which carry no flow change, still count.
+        raw = [(h["v"].get(a, 0.0), h.get("f", {}).get(a, 0.0)) for h in hist]
+        # De-spike single-snapshot price glitches (a held token momentarily unpriced) with median-of-3.
+        vs = [x[0] for x in raw]
+        clean = list(vs)
+        for i in range(1, len(vs) - 1):
+            clean[i] = sorted((vs[i - 1], vs[i], vs[i + 1]))[1]
+        seg_peak = dd = 0.0
+        prev_f = None
+        for i, (_, f) in enumerate(raw):
+            v = clean[i]
+            if prev_f is not None and abs(f - prev_f) > max(0.5, 0.02 * max(v, 1.0)):
+                seg_peak = v                           # capital flow -> new segment, rebase the peak
+            else:
+                seg_peak = max(seg_peak, v)
+            if seg_peak > MINCAP:
+                dd = max(dd, (seg_peak - v) / seg_peak)
+            prev_f = f
+        return round(min(dd, 1.0) * 100, 2)            # clamp as a safety net
 
     import datetime as _dt
     HACK_DAYS = 7                  # Jun 22..28 UTC -> Day 1..Day 7
@@ -650,7 +667,7 @@ def main():
             win["d%d" % n] = dayret_n(s, n, b_eff)
         rows.append({"agent": a, "value": v, "dep": round(cap_in - cap_out, 2),
                      "trades": swaps.get(a, 0), "traded": swaps.get(a, 0) >= 1,
-                     "ret_pct": allret, "dd_pct": drawdown(s),
+                     "ret_pct": allret, "dd_pct": drawdown(a),
                      "holds": holds.get(a, []), "win": win})
     if baseline:   # live: active traders first (>=1 swap today), then by return; ties neutral
         rows.sort(key=lambda r: (not r["traded"],
