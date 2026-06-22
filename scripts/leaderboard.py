@@ -39,6 +39,7 @@ GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} cap
 FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
 LAZY_F = os.path.join(ROOT, "dashboard", "lb_lazy.json")    # late-funders' first-funded baseline
 BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # native-BNB deposits (bnb_deposits.py)
+LASTPX_F = os.path.join(ROOT, "dashboard", "last_prices.json")    # carry-forward price store (feed-gap guard)
 MAXHIST = 400          # ~8 days at 30-min cadence
 MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
 DQ = 0.30              # disqualification drawdown line
@@ -275,10 +276,24 @@ def cmc_prices(symbols):
                 if sym and px:
                     out[sym] = float(px)
             time.sleep(0.1)
-        if out:
-            _cache_put("cmc", out)
     except Exception as e:
         print("cmc prices failed:", e)
+    # Carry forward the last known price for any eligible token CMC omitted this round, so a
+    # transient feed gap can't crater a holder's value (the cause of the false multi-hour drawdowns).
+    try:
+        last = json.load(open(LASTPX_F))
+    except Exception:
+        last = {}
+    for sym in idmap:
+        if sym not in out and sym in last:
+            out[sym] = last[sym]
+    if out:
+        last.update(out)                       # fresh quotes refresh the carry-forward store
+        try:
+            json.dump(last, open(LASTPX_F, "w"))
+        except Exception:
+            pass
+        _cache_put("cmc", out)
     return out
 
 
