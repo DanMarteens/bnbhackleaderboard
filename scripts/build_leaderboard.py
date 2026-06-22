@@ -191,7 +191,7 @@ function stats(){const rv=R.map(winv).filter(v=>v!=null),av=rv.length?rv.reduce(
   LIVE?['Avg PnL',av==null?'—':(av>=0?'+':'')+av.toFixed(2)+'%']:null,
   LIVE?['Survivors',S.survivors+'/'+S.n]:null].filter(Boolean)
   .map(([k,v])=>`<div class="st"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');}
-function badges(){const f=R.filter(r=>r.value>0);if(!f.length){$('badges').innerHTML='';return;}
+function badges(){const f=R.filter(r=>r.value>0&&(!LIVE||r.traded));if(!f.length){$('badges').innerHTML='';return;}  // only ranked (traded) agents — consistent with the table
  const top=f.slice().sort((a,b)=>((winv(b)??-1e9)-(winv(a)??-1e9)))[0];
  const mov=f.slice().sort((a,b)=>(((b.win&&b.win['24h'])??-1e9)-((a.win&&a.win['24h'])??-1e9)))[0];
  const safe=f.slice().sort((a,b)=>a.dd_pct-b.dd_pct)[0];
