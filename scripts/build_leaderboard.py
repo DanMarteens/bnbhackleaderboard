@@ -171,7 +171,9 @@ const WINS={'1h':'1H','24h':'24H','all':'All','d1':'Day 1','d2':'Day 2','d3':'Da
 const PRIZE={1:'$10k',2:'$6k',3:'$4k',4:'$2k',5:'$2k'};
 let WIN='all',key='ret_pct',dir=-1;
 const winv=r=>{const v=r.win?r.win[WIN]:r.ret_pct;return v==null?null:v;};
-function ranks(){R.slice().sort((a,b)=>((winv(b)??-1e9)-(winv(a)??-1e9))).forEach((r,i)=>r._rk=i+1);}
+const tb=(a,b)=>a.agent<b.agent?-1:1;                       // neutral tiebreak — NOT wallet size
+const STARTED=LIVE&&R.some(r=>{const v=r.win&&r.win.all;return v!=null&&Math.abs(v)>1e-9;}); // any real PnL yet?
+function ranks(){R.slice().sort((a,b)=>((winv(b)??-1e9)-(winv(a)??-1e9))||tb(a,b)).forEach((r,i)=>r._rk=i+1);}
 function stats(){const rv=R.map(winv).filter(v=>v!=null),av=rv.length?rv.reduce((a,b)=>a+b,0)/rv.length:null;
  $('stats').innerHTML=[['Agents',S.n],['Funded',S.funded],['Deployed',fmt(S.deployed||0)],
   LIVE?['In profit',R.filter(r=>(winv(r)||0)>0).length]:null,
@@ -183,19 +185,20 @@ function badges(){const f=R.filter(r=>r.value>0);if(!f.length){$('badges').inner
  const mov=f.slice().sort((a,b)=>(((b.win&&b.win['24h'])??-1e9)-((a.win&&a.win['24h'])??-1e9)))[0];
  const safe=f.slice().sort((a,b)=>a.dd_pct-b.dd_pct)[0];
  const card=(l,r,v)=>`<div class="b"><div class="bl">${l}</div><div class="bn"><span class="dot" style="display:inline-block;background:${dot(r.agent)};vertical-align:middle"></span>${short(r.agent)}</div><div class="bv">${v}</div></div>`;
- const c=[];if(LIVE&&top&&winv(top)!=null)c.push(card('🥇 Top '+WINS[WIN],top,pct(winv(top))));
+ const c=[];if(STARTED&&top&&winv(top)!=null)c.push(card('🥇 Top '+WINS[WIN],top,pct(winv(top))));
  if(mov&&mov.win&&mov.win['24h']!=null)c.push(card('🔥 Top mover 24h',mov,pct(mov.win['24h'])));
- if(LIVE&&safe)c.push(card('🛡️ Lowest drawdown',safe,safe.dd_pct.toFixed(1)+'%'));
+ if(STARTED&&safe)c.push(card('🛡️ Lowest drawdown',safe,safe.dd_pct.toFixed(1)+'%'));
  $('badges').innerHTML=c.join('');}
 if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
+else if(!STARTED){$('banner').className='banner';$('banner').innerHTML='🟢 <b>Live — everyone starts at 0%.</b> Rank is by total return and updates as agents trade. Wallet size does not affect rank; order here is neutral until the first trades land.';}
 const cols=[['#','rank',1],['Agent','agent',0],['Chart','',0,'spk'],['Value','value',1],['PnL','ret_pct',1],['24h','chg24h',1,'c24'],['DQ risk','dd_pct',1,'dqcol']];
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
 function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
- return `<div class="rw"><div class="row ${r._rk<=5?'r'+r._rk:''}" onclick="this.nextElementSibling.classList.toggle('open')">
+ return `<div class="rw"><div class="row ${STARTED&&r._rk<=5?'r'+r._rk:''}" onclick="this.nextElementSibling.classList.toggle('open')">
   <div class="n">${r._rk}</div>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
-   ${WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
+   ${STARTED&&WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
    ${r.dep>1?`<span class="dep" title="external deposits since go-live — excluded from PnL">+$${r.dep>=1000?Math.round(r.dep).toLocaleString():Math.round(r.dep)} dep</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="spk">${spark(r.spark)}</div><div class="vv">${fmt(r.value)}</div><div class="vv">${pct(winv(r))}</div>
@@ -205,7 +208,7 @@ function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
  const mv=parseFloat($('minv').value);if(!isNaN(mv))rs=rs.filter(r=>r.value>=mv);
  const f=$('flt').value;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(winv(r)||0)>0);
- rs.sort((a,b)=>{const av=key==='ret_pct'?(winv(a)??-1e9):(a[key]??-1e9),bv=key==='ret_pct'?(winv(b)??-1e9):(b[key]??-1e9);return (av-bv)*dir;});
+ rs.sort((a,b)=>{const av=key==='ret_pct'?(winv(a)??-1e9):(a[key]??-1e9),bv=key==='ret_pct'?(winv(b)??-1e9):(b[key]??-1e9);return ((av-bv)*dir)||tb(a,b);});
  $('rows').innerHTML=rs.map(rowHTML).join('')||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
 $('q').oninput=render;$('minv').oninput=render;
 $('flt').onchange=render;

@@ -450,7 +450,10 @@ def main():
                      "ret_pct": allret, "chg24h": winret(s, 86400),
                      "dd_pct": drawdown(s), "spark": spark(s), "holds": holds.get(a, []),
                      "win": win})
-    rows.sort(key=lambda r: (r["ret_pct"] if r["ret_pct"] is not None else -1e9, r["value"]), reverse=True)
+    if baseline:   # live: rank by return; break ties neutrally (by address) so wallet size never sets rank
+        rows.sort(key=lambda r: (-(r["ret_pct"] if r["ret_pct"] is not None else -1e9), r["agent"]))
+    else:          # pre-go-live: no returns yet -> just surface the funded agents
+        rows.sort(key=lambda r: r["value"], reverse=True)
     for i, r in enumerate(rows):
         r["rank"] = i + 1
 
