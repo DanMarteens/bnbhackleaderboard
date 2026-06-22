@@ -39,7 +39,7 @@ HIST_F = os.path.join(ROOT, "dashboard", "history.json")
 GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} captured at baseline
 FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
 MAXHIST = 400          # ~8 days at 30-min cadence
-MINCAP = 1.0           # everyone with > $1 capital competes; under $1 is dust -> "—"
+MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
 DQ = 0.30              # disqualification drawdown line
 
 
