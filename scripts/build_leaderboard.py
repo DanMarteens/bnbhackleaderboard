@@ -133,8 +133,6 @@ background:
 </div>
 <div class="wbar"><span class="wl">PnL window</span>
   <div class="selwrap"><select id="wins" class="sel">
-    <option value="1h">1H · rolling</option>
-    <option value="24h">24H · rolling</option>
     <option value="d1">Day 1 · Jun 22</option>
     <option value="d2">Day 2 · Jun 23</option>
     <option value="d3">Day 3 · Jun 24</option>
@@ -172,7 +170,7 @@ function cd(){const n=Date.now();let t,l;if(n<START){t=START;l='Starts in';}else
  const d=Math.max(0,t-n);$('cd').innerHTML=`${l} &nbsp;<b>${Math.floor(d/864e5)}d ${Math.floor(d%864e5/36e5)}h ${Math.floor(d%36e5/6e4)}m</b>`;}
 cd();setInterval(cd,60000);
 $('upd').textContent=new Date(D.built_ts*1000).toUTCString().replace('GMT','UTC');
-const WINS={'1h':'1H','24h':'24H','all':'All','d1':'Day 1','d2':'Day 2','d3':'Day 3','d4':'Day 4','d5':'Day 5','d6':'Day 6','d7':'Day 7'};
+const WINS={'all':'All','d1':'Day 1','d2':'Day 2','d3':'Day 3','d4':'Day 4','d5':'Day 5','d6':'Day 6','d7':'Day 7'};
 const PRIZE={1:'$10k',2:'$6k',3:'$4k',4:'$2k',5:'$2k'};
 let WIN='all',key='ret_pct',dir=-1;
 const winv=r=>{const v=r.win?r.win[WIN]:r.ret_pct;return v==null?null:v;};
