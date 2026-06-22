@@ -680,7 +680,7 @@ def main():
         win = {"all": allret}                          # All + Day 1..Day 7 (UTC days)
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, b_eff)
-        rows.append({"agent": a, "value": v, "dep": round(cap_in - cap_out, 2),
+        rows.append({"agent": a, "value": v, "base": round(b_eff, 2), "dep": round(cap_in - cap_out, 2),
                      "trades": swaps.get(a, 0), "traded": swaps.get(a, 0) >= 1,
                      "ret_pct": allret, "dd_pct": drawdown(a),
                      "holds": holds.get(a, []), "win": win})
