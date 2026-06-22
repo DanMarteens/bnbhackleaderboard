@@ -136,16 +136,21 @@ def load_tokens():
         cfg = __import__("yaml").safe_load(open(os.path.join(ROOT, "config.yaml")))
         tokens = dict(cfg["twak"]["token_contracts"])
     tokens.setdefault("USDT", USDT)
+    cmc_syms = set()
     try:                                            # PRIMARY: live CMC prices (bot's cache)
         mc = os.environ.get("MARKET_CACHE", os.path.join(ROOT, "dashboard", "_market_cache.json"))
         fresh = json.load(open(mc)).get("prices", {})
-        prices.update({k: v for k, v in fresh.items() if v})
+        for k, v in fresh.items():
+            if v:
+                prices[k] = v; cmc_syms.add(k)
     except Exception:
         pass
-    if os.environ.get("LB_USE_COINGECKO"):          # opt-in last resort for anything unpriced
-        missing = {s: tokens[s] for s in tokens if not prices.get(s)}
-        if missing:
-            prices.update(coingecko_prices(missing))
+    # CoinGecko (by BSC contract) fills every eligible token the CMC cache doesn't cover —
+    # the bot only pulls its ~40-token trading universe, so this gives live prices for the
+    # other ~100 eligible tokens (UNI, KAVA, ...). Cached 10 min, so rate-limit safe.
+    gap = {s: tokens[s] for s in tokens if s not in cmc_syms}
+    if gap:
+        prices.update(coingecko_prices(gap))
     for s in tokens:
         if s in STABLES:
             prices[s] = 1.0
@@ -178,7 +183,7 @@ def _cache_put(name, v):
 def coingecko_prices(tokens):
     """Current USD prices by BSC contract address (free, no key). Returns {sym: price}
     for whatever resolves; callers keep prior prices for the rest. Cached CACHE_TTL s."""
-    cached = _cache_get("cg")
+    cached = _cache_get("cg", 600)         # prices move slowly -> 10-min cache (rate-limit safe)
     if cached is not None:
         return cached
     addr_sym = {a.lower(): s for s, a in tokens.items()}
@@ -248,16 +253,14 @@ def multicall(pairs, block="latest"):
 def value_agents(agents, tokens, prices, decimals, block="latest"):
     """Returns (totals{agent:usd}, holdings{agent:[[sym,usd], ...] top by value}).
 
-    Counts BEP-20 balances AND native BNB (via Multicall3.getEthBalance) — otherwise an
-    agent that swaps into native BNB looks like it lost value, and one funded in BNB looks
-    inflated. `block` lets the same logic value a historical block for the go-live baseline."""
+    Counts only ELIGIBLE BEP-20 balances. Native BNB / WBNB are NOT on the eligible list,
+    so they are deliberately excluded (they're the gas token, not a scored asset).
+    `block` lets the same logic value a historical block for the go-live baseline."""
     syms = list(tokens)
     pairs = [(tokens[s], SEL_BAL + "0" * 24 + ag[2:]) for ag in agents for s in syms]
     res = multicall(pairs, block)
-    nat = multicall([(MULTICALL3, SEL_ETHBAL + "0" * 24 + ag[2:]) for ag in agents], block)
-    bnb_px = float(prices.get("WBNB") or prices.get("BNB") or 0)
     vals, holds, k = {}, {}, 0
-    for i, ag in enumerate(agents):
+    for ag in agents:
         tot, hh = 0.0, []
         for s in syms:
             r = res[k]; k += 1
@@ -266,12 +269,6 @@ def value_agents(agents, tokens, prices, decimals, block="latest"):
                 if usd > 0.01:
                     tot += usd
                     hh.append([s, round(usd, 2)])
-        rb = nat[i] if i < len(nat) else None
-        if rb and rb != "0x" and bnb_px > 0:
-            bnb_usd = int(rb, 16) / 1e18 * bnb_px
-            if bnb_usd > 0.01:
-                tot += bnb_usd
-                hh.append(["BNB", round(bnb_usd, 2)])
         vals[ag] = round(tot, 2)
         holds[ag] = sorted(hh, key=lambda x: -x[1])[:8]
     return vals, holds
