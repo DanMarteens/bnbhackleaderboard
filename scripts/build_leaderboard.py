@@ -164,8 +164,10 @@ const pct=v=>v==null?'<span class="zero">—</span>':`<span class="${v>0?'pos':v
 function spark(a){if(!a||a.length<2)return '';const w=72,h=20,mn=Math.min(...a),mx=Math.max(...a),rg=(mx-mn)||1;
  const p=a.map((v,i)=>`${(i/(a.length-1)*w).toFixed(1)},${(h-(v-mn)/rg*h).toFixed(1)}`).join(' ');
  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${p}" fill="none" stroke="${a[a.length-1]>=a[0]?'var(--g)':'var(--r)'}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;}
-function dq(dd){const p=Math.min(100,dd/30*100),c=p<40?'var(--g)':p<70?'var(--gold)':'var(--r)';
- return `<div class="dqcell"><div class="dqwrap"><div style="height:100%;width:${p}%;background:${c}"></div></div><span class="dqv">${dd.toFixed(0)}%</span></div>`;}
+// Drawdown shown as a plain coloured % (no bar): grey when small, gold approaching the
+// 30% DQ line, red when severe. 30% is disqualification.
+function dq(dd){const c=dd<10?'var(--mut)':dd<22?'var(--gold)':'var(--r)';
+ return `<span class="dqv" style="color:${c}">${dd.toFixed(1)}%</span>`;}
 const START=Date.UTC(2026,5,22),END=Date.UTC(2026,5,29);
 function cd(){const n=Date.now();let t,l;if(n<START){t=START;l='Starts in';}else if(n<END){t=END;l='Time left';}else{$('cd').textContent='Competition ended';return;}
  const d=Math.max(0,t-n);$('cd').innerHTML=`${l} &nbsp;<b>${Math.floor(d/864e5)}d ${Math.floor(d%864e5/36e5)}h ${Math.floor(d%36e5/6e4)}m</b>`;}
