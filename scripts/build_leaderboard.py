@@ -122,7 +122,6 @@ background:
 </div>
 <div class="stats" id="stats"></div>
 <div id="banner"></div>
-<div class="bad" id="badges"></div>
 <div class="tools">
   <input id="q" class="inp" placeholder="search agent address…"/>
   <input id="minv" class="inp" type="number" placeholder="min $"/>
@@ -227,8 +226,8 @@ function render(){let rs=R.slice();
 $('q').oninput=render;$('minv').oninput=render;
 $('flt').onchange=render;
 (function(){const sel=$('wins');for(let n=1;n<=7;n++){const st=Date.UTC(2026,5,21+n),o=sel.querySelector('option[value="d'+n+'"]');if(o&&Date.now()<st){o.disabled=true;o.textContent+=' · soon';}}})();
-$('wins').onchange=()=>{WIN=$('wins').value;ranks();stats();badges();render();};
-ranks();stats();badges();render();
+$('wins').onchange=()=>{WIN=$('wins').value;ranks();stats();render();};
+ranks();stats();render();
 </script></body></html>"""
 
 html = TEMPLATE.replace("/*DATA*/", json.dumps(D))
