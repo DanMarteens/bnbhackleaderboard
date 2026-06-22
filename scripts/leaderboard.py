@@ -38,6 +38,7 @@ HIST_F = os.path.join(ROOT, "dashboard", "history.json")
 GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} captured at baseline
 FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
 LAZY_F = os.path.join(ROOT, "dashboard", "lb_lazy.json")    # late-funders' first-funded baseline
+BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # native-BNB deposits (bnb_deposits.py)
 MAXHIST = 400          # ~8 days at 30-min cadence
 MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
 DQ = 0.30              # disqualification drawdown line
@@ -619,18 +620,32 @@ def main():
             return None
         return round((cur / prev - 1) * 100, 2)
 
+    try:
+        bnb_dep = json.load(open(BNB_DEP_F))           # native-BNB deposits (EOA-funded) per agent
+    except Exception:
+        bnb_dep = {}
+
     rows = []
     for a in agents:
         s = series(a); v = vals.get(a, 0.0); b = baseline.get(a) or 0.0
-        # Deposit-INVARIANT return vs the fixed go-live (or first-funded) stake, with external
-        # deposits/withdrawals removed. funded_credit nets out the initial funding that ESTABLISHED
-        # a late funder's baseline, so it isn't also subtracted as a deposit (the -100% bug).
-        f = flows.get(a, 0.0) - funded_credit.get(a, 0.0)
-        allret = round(((v - f) / b - 1) * 100, 2) if b > MINCAP else None
+        # Deposit-INVARIANT return vs the fixed go-live (or first-funded) stake. External capital
+        # added after go-live must not read as profit: token legs come from `flows` (funded_credit
+        # undoes the late-funder double-count), native-BNB top-ups from bnb_deposits. Deposits go in
+        # the DENOMINATOR (capital base), NOT subtracted from value — on a tiny base a subtraction
+        # credits the deposit's whole grown value to the original stake (the +500% dust artifact).
+        net = flows.get(a, 0.0) - funded_credit.get(a, 0.0)   # signed token flow (in - out)
+        # Late funders (lazy baseline) already have their funding folded into the baseline via
+        # funded_credit; netting their deposit BNB again would double-subtract it (the -100% bug).
+        # Only net native-BNB deposits for wallets with a real go-live baseline.
+        bnb_in = (bnb_dep.get(a, 0.0) or 0.0) if a not in funded_credit else 0.0
+        dep = max(0.0, net) + bnb_in                          # capital in (token + native BNB)
+        wd = max(0.0, -net)                                   # capital out (added back to value)
+        b_eff = b + dep
+        allret = round(((v + wd) / b_eff - 1) * 100, 2) if b_eff > MINCAP else None
         win = {"all": allret}                          # All + Day 1..Day 7 (UTC days)
         for n in range(1, HACK_DAYS + 1):
-            win["d%d" % n] = dayret_n(s, n, b)
-        rows.append({"agent": a, "value": v, "dep": round(f, 2),
+            win["d%d" % n] = dayret_n(s, n, b_eff)
+        rows.append({"agent": a, "value": v, "dep": round(dep - wd, 2),
                      "trades": swaps.get(a, 0), "traded": swaps.get(a, 0) >= 1,
                      "ret_pct": allret, "dd_pct": drawdown(s),
                      "holds": holds.get(a, []), "win": win})
