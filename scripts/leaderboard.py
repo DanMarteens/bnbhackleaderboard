@@ -264,27 +264,35 @@ def value_agents(agents, tokens, prices, decimals):
     return vals, holds
 
 
-def external_flows(agents, from_block, tokens, prices, decimals):
-    """Net external BEP-20 deposit (USD) per agent since `from_block`.
+def scan_activity(agents, golive_block, day_start_block, tokens, prices, decimals):
+    """One getLogs pass over agents' BEP-20 Transfers since go-live, classified by the
+    COUNTERPARTY (the non-agent side), resolved via eth_getCode:
 
-    A deposit is an INBOUND token Transfer whose sender is an EOA; a withdrawal is an
-    OUTBOUND transfer to an EOA. Transfers to/from *contracts* (DEX routers, pairs,
-    aggregators) are trades, not capital flows -> ignored. This lets the leaderboard
-    rank by trading-only return: PnL is measured against (baseline + net deposits), so
-    topping the wallet up grows the capital base instead of the return.
+      * counterparty is a CONTRACT (DEX router / pair / aggregator) -> a TRADE leg.
+        This catches token<->token AND BNB<->token swaps (where only one token leg
+        shows on-chain, the other being native BNB) -> robust 'did they trade'.
+      * counterparty is an EOA -> a capital flow: inbound = deposit, outbound = withdrawal.
 
-    getLogs-based (NodeReal's transfer indexer returns empty on BSC). Fully fail-safe:
-    falls back to the cached flows (or zeros) on any error -> never breaks a run."""
+    Returns (flows, trades):
+      flows[a]  = net external deposit USD since go-live (EOA legs, in - out) -> the
+                  deposit-invariant baseline adjustment.
+      trades[a] = count of distinct txs with a contract-counterparty leg on/after
+                  day_start_block -> 'traded today' (>=1 swap/UTC-day to stay ranked).
+
+    Caveat: a deposit routed through a contract (a bridge) reads as a trade, not a flow.
+    getLogs + eth_getCode based; cached CACHE_TTL s; fail-safe -> cached/zeros."""
     flows = {a: 0.0 for a in agents}
+    trades = {a: 0 for a in agents}
     if not RPC or not agents:
-        return flows
-    cached = _cache_get("flows")
+        return flows, trades
+    cached = _cache_get("activity")
     if cached is not None:
-        return {a: float(cached.get(a, 0.0)) for a in agents}
+        f, t = cached.get("flows", {}), cached.get("trades", {})
+        return ({a: float(f.get(a, 0.0)) for a in agents}, {a: int(t.get(a, 0)) for a in agents})
     try:
         latest = int(rpc("eth_blockNumber", []), 16)
-        if from_block >= latest:
-            return flows
+        if golive_block >= latest:
+            return flows, trades
         addr_sym = {a.lower(): s for s, a in tokens.items()}
         token_addrs = list({a for a in tokens.values()})
         agent_set = set(a.lower() for a in agents)
@@ -303,7 +311,7 @@ def external_flows(agents, from_block, tokens, prices, decimals):
                 return grab(b, mid, topics, depth + 1) + grab(mid + 1, e, topics, depth + 1)
             return []
 
-        logs, b, step = [], from_block, 45000
+        logs, b, step = [], golive_block, 45000
         while b <= latest:
             e = min(b + step, latest)
             logs += grab(b, e, [TOPIC_TRANSFER, None, agent_topics])    # inbound (to = agent)
@@ -311,22 +319,37 @@ def external_flows(agents, from_block, tokens, prices, decimals):
             b = e + 1
             time.sleep(0.1)
 
-        # Classify per transaction: a tx where the agent BOTH receives and sends a token is a
-        # trade (swap / add-remove LP) -> not a capital flow. Inbound-only is a deposit;
-        # outbound-only is a withdrawal. This catches deposits routed through ANY contract
-        # (bridge, CEX, smart wallet), not just plain EOA sends -> much harder to game: to
-        # top up without it reading as inbound-only you'd have to give something away in the
-        # same tx.
-        seen = set()
-        legs = {}                                  # (agent, txHash) -> [inbound_usd, outbound_usd]
+        seen, rows, cps = set(), [], set()
         for l in logs:
             ident = (l.get("transactionHash"), l.get("logIndex"))
-            if ident in seen:                      # dedup: a self-transfer hits both queries
+            if ident in seen or len(l.get("topics", [])) < 3:
                 continue
             seen.add(ident)
-            if len(l.get("topics", [])) < 3:
+            frm, to = "0x" + l["topics"][1][-40:], "0x" + l["topics"][2][-40:]
+            try:
+                blk = int(l.get("blockNumber", "0x0"), 16)
+            except Exception:
+                blk = 0
+            rows.append((frm, to, l, blk))
+            cps.add(to if frm in agent_set else frm)
+        cps = list(cps)
+        is_contract = {}
+        codes = rpc_batch([("eth_getCode", [c, "latest"]) for c in cps]) if cps else []
+        for c, r in zip(cps, codes):
+            is_contract[c] = r not in (None, "0x", "0x0", "")
+        traded_tx = {}
+        for frm, to, l, blk in rows:
+            if to in agent_set and frm not in agent_set:
+                agent, cp, inbound = to, frm, True
+            elif frm in agent_set and to not in agent_set:
+                agent, cp, inbound = frm, to, False
+            else:
+                continue                            # agent<->agent: skip
+            if is_contract.get(cp):                 # DEX leg -> a trade
+                if blk >= day_start_block:
+                    traded_tx.setdefault(agent, set()).add(l.get("transactionHash"))
                 continue
-            sym = addr_sym.get(l.get("address", "").lower())
+            sym = addr_sym.get(l.get("address", "").lower())          # EOA leg -> capital flow
             price = float(prices.get(sym, 0) or 0) if sym else 0
             if price <= 0:
                 continue
@@ -334,29 +357,20 @@ def external_flows(agents, from_block, tokens, prices, decimals):
                 usd = int(l["data"], 16) / (10 ** decimals.get(sym, 18)) * price
             except Exception:
                 continue
-            if usd <= 0:
-                continue
-            frm, to = "0x" + l["topics"][1][-40:], "0x" + l["topics"][2][-40:]
-            h = l.get("transactionHash")
-            if to in agent_set and frm not in agent_set:
-                legs.setdefault((to, h), [0.0, 0.0])[0] += usd
-            elif frm in agent_set and to not in agent_set:
-                legs.setdefault((frm, h), [0.0, 0.0])[1] += usd
-        for (a, _), (inn, out) in legs.items():
-            if inn > 0 and out > 0:                # both legs in one tx -> swap/LP, trading
-                continue
-            flows[a] = flows.get(a, 0.0) + (inn - out)   # inbound-only=deposit, outbound-only=withdrawal
+            if usd > 0:
+                flows[agent] = flows.get(agent, 0.0) + (usd if inbound else -usd)
         flows = {a: round(flows.get(a, 0.0), 2) for a in agents}
+        trades = {a: len(traded_tx.get(a, ())) for a in agents}
         json.dump(flows, open(FLOWS_F, "w"))
-        _cache_put("flows", flows)
-        return flows
+        _cache_put("activity", {"flows": flows, "trades": trades})
+        return flows, trades
     except Exception as ex:
-        print("flow calc failed (using cache/zero):", ex)
+        print("activity scan failed (using cache/zero):", ex)
         try:
             cached = json.load(open(FLOWS_F))
-            return {a: float(cached.get(a, 0.0)) for a in agents}
+            return ({a: float(cached.get(a, 0.0)) for a in agents}, {a: 0 for a in agents})
         except Exception:
-            return {a: 0.0 for a in agents}
+            return ({a: 0.0 for a in agents}, {a: 0 for a in agents})
 
 
 def block_at_ts(target_ts):
@@ -378,74 +392,6 @@ def block_at_ts(target_ts):
         else:
             hi = mid
     return lo
-
-
-def traded_today(agents, tokens):
-    """Per-agent count of swap transactions in the current UTC day. A swap = a tx where
-    the agent both RECEIVES and SENDS an eligible token (a DEX trade). The competition
-    requires >=1 swap per UTC day to stay ranked, so this separates active traders from
-    idle wallets. getLogs-based, cached CACHE_TTL s, fail-safe -> {}."""
-    counts = {a: 0 for a in agents}
-    if not RPC or not agents:
-        return counts
-    cached = _cache_get("swaps")
-    if cached is not None:
-        return {a: int(cached.get(a, 0)) for a in agents}
-    try:
-        import datetime as _dt
-        day0 = int(_dt.datetime.now(_dt.timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0).timestamp())
-        try:                       # never scan before go-live (Day 1: day0 == go-live)
-            day0 = max(day0, json.load(open(GOLIVE_F)).get("ts", day0))
-        except Exception:
-            pass
-        from_block = block_at_ts(day0)
-        latest = int(rpc("eth_blockNumber", []), 16)
-        token_addrs = list({a for a in tokens.values()})
-        agent_set = set(a.lower() for a in agents)
-        agent_topics = ["0x" + "0" * 24 + a[2:] for a in agents]
-
-        def grab(b, e, topics, depth=0):
-            for _ in range(3):
-                g = _post({"jsonrpc": "2.0", "id": 1, "method": "eth_getLogs", "params": [{
-                    "address": token_addrs, "fromBlock": hex(b), "toBlock": hex(e),
-                    "topics": topics}]})
-                if "error" not in g:
-                    return g["result"]
-                time.sleep(1.0)
-            if b < e and depth < 12:
-                m = (b + e) // 2
-                return grab(b, m, topics, depth + 1) + grab(m + 1, e, topics, depth + 1)
-            return []
-
-        logs, b, step = [], from_block, 45000
-        while b <= latest:
-            e = min(b + step, latest)
-            logs += grab(b, e, [TOPIC_TRANSFER, None, agent_topics])
-            logs += grab(b, e, [TOPIC_TRANSFER, agent_topics, None])
-            b = e + 1
-        seen, legs = set(), {}
-        for l in logs:
-            ident = (l.get("transactionHash"), l.get("logIndex"))
-            if ident in seen:
-                continue
-            seen.add(ident)
-            if len(l.get("topics", [])) < 3:
-                continue
-            frm, to = "0x" + l["topics"][1][-40:], "0x" + l["topics"][2][-40:]
-            h = l.get("transactionHash")
-            if to in agent_set and frm not in agent_set:
-                legs.setdefault((to, h), [0, 0])[0] += 1
-            elif frm in agent_set and to not in agent_set:
-                legs.setdefault((frm, h), [0, 0])[1] += 1
-        for (a, _), (inn, out) in legs.items():
-            if inn > 0 and out > 0:        # both legs in one tx -> a swap/trade
-                counts[a] = counts.get(a, 0) + 1
-        _cache_put("swaps", counts)
-        return counts
-    except Exception as ex:
-        print("trade scan failed:", ex)
-        return {a: 0 for a in agents}
 
 
 def main():
@@ -484,19 +430,24 @@ def main():
         except Exception:
             baseline = {}
 
-    # ---- net external deposits since go-live (capital base for trading-only return) ----
+    # ---- one on-chain pass: net deposits (capital base) + who traded today ----
     flows = {a: 0.0 for a in agents}
-    try:
-        gl = json.load(open(GOLIVE_F)).get("block")
-    except Exception:
-        gl = None
-    if gl and not do_baseline:     # no post-go-live flow can exist on the baseline run
-        flows = external_flows(agents, gl, tokens, prices, decimals)
-
-    # ---- who actually traded today (>=1 swap/UTC-day required to stay ranked) ----
     swaps = {a: 0 for a in agents}
-    if gl and not do_baseline:
-        swaps = traded_today(agents, tokens)
+    try:
+        gj = json.load(open(GOLIVE_F)); gl = gj.get("block"); gl_ts = gj.get("ts")
+    except Exception:
+        gl = gl_ts = None
+    if gl and not do_baseline:     # no post-go-live flow can exist on the baseline run
+        import datetime as _dt0
+        day0 = int(_dt0.datetime.now(_dt0.timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0).timestamp())
+        if gl_ts:
+            day0 = max(day0, gl_ts)        # Day 1: day-start == go-live
+        try:
+            dsb = block_at_ts(day0)
+        except Exception:
+            dsb = gl
+        flows, swaps = scan_activity(agents, gl, dsb, tokens, prices, decimals)
 
     # ---- history time-series (append + cap) -> enables sparklines/24h/drawdown ----
     try:
