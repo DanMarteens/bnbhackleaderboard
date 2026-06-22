@@ -112,8 +112,16 @@ STABLES = {"USDT", "USDC", "DAI", "TUSD", "FDUSD", "USD1", "USDe", "FRAX", "FRXU
 
 def load_tokens():
     """Broad set (125 resolved eligible tokens) for accurate valuation: address +
-    decimals from bsc_contracts.json. Prices: fresh market-cache where we have it,
-    else the resolved file's priceUsd; stablecoins pinned to 1."""
+    decimals from bsc_contracts.json.
+
+    Prices, in priority order:
+      1. CoinMarketCap (live) — the bot already pulls these via the CMC MCP into the
+         shared market cache (MARKET_CACHE / dashboard/_market_cache.json). This is the
+         primary, on-brand source and covers the liquid tradeable universe agents hold.
+      2. The resolved file's static priceUsd — fallback for the long tail.
+      3. CoinGecko — only an opt-in last resort (LB_USE_COINGECKO=1) for anything still
+         unpriced; off by default so we don't depend on it.
+      Stablecoins are pinned to 1."""
     bc = os.path.join(ROOT, "config", "bsc_contracts.json")
     tokens, decimals, prices = {}, {}, {}
     if os.path.exists(bc):
@@ -122,26 +130,56 @@ def load_tokens():
             if v.get("address"):
                 tokens[s] = v["address"]
                 decimals[s] = v.get("decimals", 18)
-                prices[s] = float(v.get("priceUsd", 0) or 0)
+                prices[s] = float(v.get("priceUsd", 0) or 0)   # static fallback base
     else:
         cfg = __import__("yaml").safe_load(open(os.path.join(ROOT, "config.yaml")))
         tokens = dict(cfg["twak"]["token_contracts"])
     tokens.setdefault("USDT", USDT)
-    try:                                            # overlay fresh prices we already fetch
-        fresh = json.load(open(os.path.join(ROOT, "dashboard", "_market_cache.json"))).get("prices", {})
+    try:                                            # PRIMARY: live CMC prices (bot's cache)
+        mc = os.environ.get("MARKET_CACHE", os.path.join(ROOT, "dashboard", "_market_cache.json"))
+        fresh = json.load(open(mc)).get("prices", {})
         prices.update({k: v for k, v in fresh.items() if v})
     except Exception:
         pass
-    prices.update(coingecko_prices(tokens))         # freshest source (by contract, BSC)
+    if os.environ.get("LB_USE_COINGECKO"):          # opt-in last resort for anything unpriced
+        missing = {s: tokens[s] for s in tokens if not prices.get(s)}
+        if missing:
+            prices.update(coingecko_prices(missing))
     for s in tokens:
         if s in STABLES:
             prices[s] = 1.0
     return tokens, prices, decimals
 
 
+CACHE_TTL = int(os.environ.get("LB_CACHE_TTL", "300"))   # 5 min -> a 60s loop reuses
+# expensive results (CoinGecko prices, getLogs flow/trade scans) instead of refetching
+# every tick. Re-valuation (Multicall3, keyless) still happens every run.
+
+
+def _cache_get(name, ttl=CACHE_TTL):
+    try:
+        d = json.load(open(os.path.join(ROOT, "dashboard", "_c_" + name + ".json")))
+        if int(time.time()) - d.get("_ts", 0) < ttl:
+            return d.get("v")
+    except Exception:
+        pass
+    return None
+
+
+def _cache_put(name, v):
+    try:
+        json.dump({"_ts": int(time.time()), "v": v},
+                  open(os.path.join(ROOT, "dashboard", "_c_" + name + ".json"), "w"))
+    except Exception:
+        pass
+
+
 def coingecko_prices(tokens):
     """Current USD prices by BSC contract address (free, no key). Returns {sym: price}
-    for whatever resolves; callers keep prior prices for the rest."""
+    for whatever resolves; callers keep prior prices for the rest. Cached CACHE_TTL s."""
+    cached = _cache_get("cg")
+    if cached is not None:
+        return cached
     addr_sym = {a.lower(): s for s, a in tokens.items()}
     addrs = list(addr_sym)
     out = {}
@@ -158,6 +196,8 @@ def coingecko_prices(tokens):
         except Exception:
             pass
         time.sleep(2.5)
+    if out:
+        _cache_put("cg", out)
     return out
 
 
@@ -238,6 +278,9 @@ def external_flows(agents, from_block, tokens, prices, decimals):
     flows = {a: 0.0 for a in agents}
     if not RPC or not agents:
         return flows
+    cached = _cache_get("flows")
+    if cached is not None:
+        return {a: float(cached.get(a, 0.0)) for a in agents}
     try:
         latest = int(rpc("eth_blockNumber", []), 16)
         if from_block >= latest:
@@ -305,6 +348,7 @@ def external_flows(agents, from_block, tokens, prices, decimals):
             flows[a] = flows.get(a, 0.0) + (inn - out)   # inbound-only=deposit, outbound-only=withdrawal
         flows = {a: round(flows.get(a, 0.0), 2) for a in agents}
         json.dump(flows, open(FLOWS_F, "w"))
+        _cache_put("flows", flows)
         return flows
     except Exception as ex:
         print("flow calc failed (using cache/zero):", ex)
@@ -313,6 +357,95 @@ def external_flows(agents, from_block, tokens, prices, decimals):
             return {a: float(cached.get(a, 0.0)) for a in agents}
         except Exception:
             return {a: 0.0 for a in agents}
+
+
+def block_at_ts(target_ts):
+    """First BSC block with timestamp >= target_ts (binary search)."""
+    latest = int(rpc("eth_blockNumber", []), 16)
+
+    def ts_of(n):
+        r = _post({"jsonrpc": "2.0", "id": 1, "method": "eth_getBlockByNumber",
+                   "params": [hex(n), False]})
+        return int(r["result"]["timestamp"], 16)
+
+    lo, hi = max(0, latest - 500000), latest
+    if ts_of(lo) >= target_ts:
+        return lo
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if ts_of(mid) < target_ts:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def traded_today(agents, tokens):
+    """Per-agent count of swap transactions in the current UTC day. A swap = a tx where
+    the agent both RECEIVES and SENDS an eligible token (a DEX trade). The competition
+    requires >=1 swap per UTC day to stay ranked, so this separates active traders from
+    idle wallets. getLogs-based, cached CACHE_TTL s, fail-safe -> {}."""
+    counts = {a: 0 for a in agents}
+    if not RPC or not agents:
+        return counts
+    cached = _cache_get("swaps")
+    if cached is not None:
+        return {a: int(cached.get(a, 0)) for a in agents}
+    try:
+        import datetime as _dt
+        day0 = int(_dt.datetime.now(_dt.timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0).timestamp())
+        try:                       # never scan before go-live (Day 1: day0 == go-live)
+            day0 = max(day0, json.load(open(GOLIVE_F)).get("ts", day0))
+        except Exception:
+            pass
+        from_block = block_at_ts(day0)
+        latest = int(rpc("eth_blockNumber", []), 16)
+        token_addrs = list({a for a in tokens.values()})
+        agent_set = set(a.lower() for a in agents)
+        agent_topics = ["0x" + "0" * 24 + a[2:] for a in agents]
+
+        def grab(b, e, topics, depth=0):
+            for _ in range(3):
+                g = _post({"jsonrpc": "2.0", "id": 1, "method": "eth_getLogs", "params": [{
+                    "address": token_addrs, "fromBlock": hex(b), "toBlock": hex(e),
+                    "topics": topics}]})
+                if "error" not in g:
+                    return g["result"]
+                time.sleep(1.0)
+            if b < e and depth < 12:
+                m = (b + e) // 2
+                return grab(b, m, topics, depth + 1) + grab(m + 1, e, topics, depth + 1)
+            return []
+
+        logs, b, step = [], from_block, 45000
+        while b <= latest:
+            e = min(b + step, latest)
+            logs += grab(b, e, [TOPIC_TRANSFER, None, agent_topics])
+            logs += grab(b, e, [TOPIC_TRANSFER, agent_topics, None])
+            b = e + 1
+        seen, legs = set(), {}
+        for l in logs:
+            ident = (l.get("transactionHash"), l.get("logIndex"))
+            if ident in seen:
+                continue
+            seen.add(ident)
+            if len(l.get("topics", [])) < 3:
+                continue
+            frm, to = "0x" + l["topics"][1][-40:], "0x" + l["topics"][2][-40:]
+            h = l.get("transactionHash")
+            if to in agent_set and frm not in agent_set:
+                legs.setdefault((to, h), [0, 0])[0] += 1
+            elif frm in agent_set and to not in agent_set:
+                legs.setdefault((frm, h), [0, 0])[1] += 1
+        for (a, _), (inn, out) in legs.items():
+            if inn > 0 and out > 0:        # both legs in one tx -> a swap/trade
+                counts[a] = counts.get(a, 0) + 1
+        _cache_put("swaps", counts)
+        return counts
+    except Exception as ex:
+        print("trade scan failed:", ex)
+        return {a: 0 for a in agents}
 
 
 def main():
@@ -359,6 +492,11 @@ def main():
         gl = None
     if gl and not do_baseline:     # no post-go-live flow can exist on the baseline run
         flows = external_flows(agents, gl, tokens, prices, decimals)
+
+    # ---- who actually traded today (>=1 swap/UTC-day required to stay ranked) ----
+    swaps = {a: 0 for a in agents}
+    if gl and not do_baseline:
+        swaps = traded_today(agents, tokens)
 
     # ---- history time-series (append + cap) -> enables sparklines/24h/drawdown ----
     try:
@@ -447,11 +585,13 @@ def main():
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, b)
         rows.append({"agent": a, "value": v, "dep": round(f, 2),
+                     "trades": swaps.get(a, 0), "traded": swaps.get(a, 0) >= 1,
                      "ret_pct": allret, "chg24h": winret(s, 86400),
                      "dd_pct": drawdown(s), "spark": spark(s), "holds": holds.get(a, []),
                      "win": win})
-    if baseline:   # live: rank by return; break ties neutrally (by address) so wallet size never sets rank
-        rows.sort(key=lambda r: (-(r["ret_pct"] if r["ret_pct"] is not None else -1e9), r["agent"]))
+    if baseline:   # live: active traders first (>=1 swap today), then by return; ties neutral
+        rows.sort(key=lambda r: (not r["traded"],
+                                 -(r["ret_pct"] if r["ret_pct"] is not None else -1e9), r["agent"]))
     else:          # pre-go-live: no returns yet -> just surface the funded agents
         rows.sort(key=lambda r: r["value"], reverse=True)
     for i, r in enumerate(rows):
@@ -462,6 +602,7 @@ def main():
     stats = {
         "n": len(agents),
         "funded": sum(1 for r in rows if r["value"] > 0),
+        "trading": (sum(1 for r in rows if r.get("traded")) if has_base else None),
         "deployed": round(sum(r["value"] for r in rows), 2),
         "in_profit": (sum(1 for r in rows if (r["ret_pct"] or 0) > 0) if has_base else None),
         "avg_ret": (round(sum(rets) / len(rets), 2) if rets else None),

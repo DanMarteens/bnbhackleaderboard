@@ -90,6 +90,9 @@ background:
 .r1 .n{color:var(--gold)}.r2 .n{color:#d4d8df}.r3 .n{color:#e08a3c}.r4 .n,.r5 .n{color:var(--gold2)}
 .prize{font:700 9px/1 var(--mono);background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0a0a0a;border-radius:5px;padding:3px 6px;margin-left:7px;letter-spacing:.04em;flex:none}
 .dep{font:600 9px/1 var(--mono);background:rgba(91,140,255,.16);color:#9db4ff;border:1px solid rgba(91,140,255,.3);border-radius:5px;padding:3px 6px;margin-left:7px;letter-spacing:.03em;flex:none}
+.idle{font:600 9px/1 var(--mono);background:rgba(255,170,60,.14);color:#ffb84d;border:1px solid rgba(255,170,60,.32);border-radius:5px;padding:3px 6px;margin-left:7px;letter-spacing:.03em;flex:none}
+.idlerow{opacity:.5}
+.splitrow{padding:10px 18px;font:600 10.5px/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:#ffb84d;background:rgba(255,170,60,.06);border-top:1px solid rgba(255,170,60,.18);border-bottom:1px solid var(--line)}
 .ag{display:flex;align-items:center;gap:10px;min-width:0}
 .dot{width:22px;height:22px;border-radius:50%;flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
 .adr{font:500 12.5px/1 var(--mono);overflow:hidden;text-overflow:ellipsis}
@@ -139,7 +142,7 @@ background:
     <option value="d5">Day 5 · Jun 26</option>
     <option value="d6">Day 6 · Jun 27</option>
     <option value="d7">Day 7 · Jun 28</option>
-    <option value="all" selected>All · since go-live</option>
+    <option value="all" selected>All</option>
   </select></div>
 </div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
@@ -173,9 +176,14 @@ let WIN='all',key='ret_pct',dir=-1;
 const winv=r=>{const v=r.win?r.win[WIN]:r.ret_pct;return v==null?null:v;};
 const tb=(a,b)=>a.agent<b.agent?-1:1;                       // neutral tiebreak — NOT wallet size
 const STARTED=LIVE&&R.some(r=>{const v=r.win&&r.win.all;return v!=null&&Math.abs(v)>1e-9;}); // any real PnL yet?
-function ranks(){R.slice().sort((a,b)=>((winv(b)??-1e9)-(winv(a)??-1e9))||tb(a,b)).forEach((r,i)=>r._rk=i+1);}
+// Rank ACTIVE traders only (>=1 swap this UTC day). Idle wallets are at DQ risk and get
+// no rank (shown below a divider). Pre-go-live (!LIVE) everyone is ranked normally.
+function ranks(){let i=0;
+ R.slice().sort((a,b)=>((b.traded?1:0)-(a.traded?1:0))||((winv(b)??-1e9)-(winv(a)??-1e9))||tb(a,b))
+  .forEach(r=>{r._rk=(!LIVE||r.traded)?(++i):null;});}
 function stats(){const rv=R.map(winv).filter(v=>v!=null),av=rv.length?rv.reduce((a,b)=>a+b,0)/rv.length:null;
- $('stats').innerHTML=[['Agents',S.n],['Funded',S.funded],['Deployed',fmt(S.deployed||0)],
+ $('stats').innerHTML=[['Agents',S.n],['Funded',S.funded],
+  LIVE&&S.trading!=null?['Trading',S.trading+'/'+S.n]:null,['Deployed',fmt(S.deployed||0)],
   LIVE?['In profit',R.filter(r=>(winv(r)||0)>0).length]:null,
   LIVE?['Avg PnL',av==null?'—':(av>=0?'+':'')+av.toFixed(2)+'%']:null,
   LIVE?['Survivors',S.survivors+'/'+S.n]:null].filter(Boolean)
@@ -194,10 +202,12 @@ const cols=[['#','rank',1],['Agent','agent',0],['Chart','',0,'spk'],['Value','va
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
 function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
- return `<div class="rw"><div class="row ${STARTED&&r._rk<=5?'r'+r._rk:''}" onclick="this.nextElementSibling.classList.toggle('open')">
-  <div class="n">${r._rk}</div>
+ const idle=LIVE&&!r.traded;
+ return `<div class="rw"><div class="row ${STARTED&&r.traded&&r._rk<=5?'r'+r._rk:''} ${idle?'idlerow':''}" onclick="this.nextElementSibling.classList.toggle('open')">
+  <div class="n">${r._rk==null?'·':r._rk}</div>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
-   ${STARTED&&WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
+   ${STARTED&&r.traded&&WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
+   ${idle?`<span class="idle" title="no swap yet this UTC day — at least 1 trade/day is required to stay ranked">no trade today</span>`:''}
    ${r.dep>1?`<span class="dep" title="external deposits since go-live — excluded from PnL">+$${r.dep>=1000?Math.round(r.dep).toLocaleString():Math.round(r.dep)} dep</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="spk">${spark(r.spark)}</div><div class="vv">${fmt(r.value)}</div><div class="vv">${pct(winv(r))}</div>
@@ -207,8 +217,10 @@ function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
  const mv=parseFloat($('minv').value);if(!isNaN(mv))rs=rs.filter(r=>r.value>=mv);
  const f=$('flt').value;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(winv(r)||0)>0);
- rs.sort((a,b)=>{const av=key==='ret_pct'?(winv(a)??-1e9):(a[key]??-1e9),bv=key==='ret_pct'?(winv(b)??-1e9):(b[key]??-1e9);return ((av-bv)*dir)||tb(a,b);});
- $('rows').innerHTML=rs.map(rowHTML).join('')||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
+ rs.sort((a,b)=>{const av=key==='ret_pct'?(winv(a)??-1e9):(a[key]??-1e9),bv=key==='ret_pct'?(winv(b)??-1e9):(b[key]??-1e9);return ((b.traded?1:0)-(a.traded?1:0))||((av-bv)*dir)||tb(a,b);});
+ let html='',div=false;
+ rs.forEach(r=>{if(LIVE&&!r.traded&&!div){html+='<div class="splitrow">Not trading today — at risk of disqualification · ≥1 swap per UTC day required to stay ranked</div>';div=true;}html+=rowHTML(r);});
+ $('rows').innerHTML=html||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
 $('q').oninput=render;$('minv').oninput=render;
 $('flt').onchange=render;
 (function(){const sel=$('wins');for(let n=1;n<=7;n++){const st=Date.UTC(2026,5,21+n),o=sel.querySelector('option[value="d'+n+'"]');if(o&&Date.now()<st){o.disabled=true;o.textContent+=' · soon';}}})();

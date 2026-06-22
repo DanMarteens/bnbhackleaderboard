@@ -1,7 +1,9 @@
 name: leaderboard
 on:
-  schedule:
-    - cron: "*/30 * * * *"      # refresh every 30 min during the competition
+  # Primary updates run on the VPS every ~60s (CMC prices + single-writer state).
+  # GitHub schedule is disabled to avoid two writers fighting; kept as a manual fallback.
+  # schedule:
+  #   - cron: "*/30 * * * *"
   workflow_dispatch:
 permissions:
   contents: write               # to commit the one-time go-live baseline
