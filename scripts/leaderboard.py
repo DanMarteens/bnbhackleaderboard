@@ -627,25 +627,28 @@ def main():
 
     rows = []
     for a in agents:
-        s = series(a); v = vals.get(a, 0.0); b = baseline.get(a) or 0.0
-        # Deposit-INVARIANT return vs the fixed go-live (or first-funded) stake. External capital
-        # added after go-live must not read as profit: token legs come from `flows` (funded_credit
-        # undoes the late-funder double-count), native-BNB top-ups from bnb_deposits. Deposits go in
-        # the DENOMINATOR (capital base), NOT subtracted from value — on a tiny base a subtraction
-        # credits the deposit's whole grown value to the original stake (the +500% dust artifact).
-        net = flows.get(a, 0.0) - funded_credit.get(a, 0.0)   # signed token flow (in - out)
-        # Late funders (lazy baseline) already have their funding folded into the baseline via
-        # funded_credit; netting their deposit BNB again would double-subtract it (the -100% bug).
-        # Only net native-BNB deposits for wallets with a real go-live baseline.
-        bnb_in = (bnb_dep.get(a, 0.0) or 0.0) if a not in funded_credit else 0.0
-        dep = max(0.0, net) + bnb_in                          # capital in (token + native BNB)
-        wd = max(0.0, -net)                                   # capital out (added back to value)
-        b_eff = b + dep
-        allret = round(((v + wd) / b_eff - 1) * 100, 2) if b_eff > MINCAP else None
+        s = series(a); v = vals.get(a, 0.0)
+        # Deposit-INVARIANT return on the ELIGIBLE sleeve. The stake is the go-live eligible value
+        # plus ALL capital that later crossed into the scored portfolio: EOA token transfers
+        # (`flows`) and native-BNB<->eligible conversions (`bnb_dep`) — BNB isn't a scored asset,
+        # so buying eligible with it is a deposit, selling back a withdrawal. Capital-in lives in
+        # the DENOMINATOR, never subtracted from value (on a tiny base a subtraction would credit
+        # the whole grown deposit to the original stake -> the +500% dust artifact).
+        net = flows.get(a, 0.0)                               # signed EOA token flow (in - out)
+        conv = bnb_dep.get(a, 0.0) or 0.0                     # net BNB->eligible conversion (signed)
+        cap_in = max(0.0, net) + max(0.0, conv)               # capital deposited into the sleeve
+        cap_out = max(0.0, -net) + max(0.0, -conv)            # capital withdrawn -> added back to value
+        if a in funded_credit:
+            # Late funder: go-live eligible ~ 0, so the stake IS the capital it injected (conversions
+            # + token deposits). Fall back to the lazy first-funded snapshot only if untraceable.
+            b_eff = cap_in if cap_in > MINCAP else (baseline.get(a) or 0.0)
+        else:
+            b_eff = (baseline.get(a) or 0.0) + cap_in         # real go-live stake + later deposits
+        allret = round(((v + cap_out) / b_eff - 1) * 100, 2) if b_eff > MINCAP else None
         win = {"all": allret}                          # All + Day 1..Day 7 (UTC days)
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, b_eff)
-        rows.append({"agent": a, "value": v, "dep": round(dep - wd, 2),
+        rows.append({"agent": a, "value": v, "dep": round(cap_in - cap_out, 2),
                      "trades": swaps.get(a, 0), "traded": swaps.get(a, 0) >= 1,
                      "ret_pct": allret, "dd_pct": drawdown(s),
                      "holds": holds.get(a, []), "win": win})

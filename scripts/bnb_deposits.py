@@ -25,11 +25,9 @@ GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")
 PART_F = os.path.join(ROOT, "dashboard", "participants.json")
 BASE_F = os.path.join(ROOT, "dashboard", "lb_baseline.json")
 LAZY_F = os.path.join(ROOT, "dashboard", "lb_lazy.json")
-LB_F = os.path.join(ROOT, "dashboard", "leaderboard.json")
 
 REFRESH_S = 840          # cache TTL: re-scan at most every ~14 min
-BASELINE_MAX = 50.0      # only low-base wallets can be deposit-inflated
-MIN_APPARENT_RET = 15.0  # only chase wallets already showing an unexplained gain
+BASELINE_MAX = 50.0      # the BNB->eligible artifact is only material on a small base
 RPC = os.environ.get("ARCHIVE_RPC", "")      # NodeReal MegaNode (nr_* enhanced methods)
 
 
@@ -62,11 +60,14 @@ def bnb_price():
     return next((float(q["price"]) for q in rows if str(q.get("id")) == "1839" and q.get("price")), 0.0)
 
 
-def bnb_deposit_bnb(addr, golive_hex, latest_hex):
-    """Sum inbound native-BNB legs from EOA senders since go-live (in BNB)."""
+def _bnb_to_contracts(addr, role, golive_hex, latest_hex):
+    """Sum native-BNB legs where the OTHER party is a contract (a DEX swap, not an
+    EOA capital transfer). role='fromAddress' -> BNB the wallet SPENT buying eligible;
+    role='toAddress' -> BNB it RECEIVED selling eligible. Returns BNB."""
+    other_key = "to" if role == "fromAddress" else "from"
     total_wei, page = 0, None
     for _ in range(20):                          # paginate defensively
-        p = {"category": ["external"], "toAddress": addr,
+        p = {"category": ["external"], role: addr,
              "fromBlock": golive_hex, "toBlock": latest_hex, "maxCount": "0x64"}
         if page:
             p["pageKey"] = page
@@ -74,12 +75,21 @@ def bnb_deposit_bnb(addr, golive_hex, latest_hex):
         for t in res.get("transfers") or []:
             v = t.get("value")
             wei = int(v, 16) if isinstance(v, str) and v.startswith("0x") else int(float(v or 0) * 1e18)
-            if wei > 0 and is_eoa(t.get("from", "")):
+            if wei > 0 and not is_eoa(t.get(other_key, "")):
                 total_wei += wei
         page = res.get("pageKey")
         if not page:
             break
     return total_wei / 1e18
+
+
+def net_bnb_into_eligible(addr, golive_hex, latest_hex):
+    """Net native BNB converted into the eligible portfolio = (BNB spent buying eligible)
+    minus (BNB received selling eligible). BNB is not a scored asset, so this conversion
+    is capital crossing into/out of the scored sleeve, not profit — it gets netted out.
+    Positive = net capital in (deposit); negative = net capital out (withdrawal)."""
+    return (_bnb_to_contracts(addr, "fromAddress", golive_hex, latest_hex)
+            - _bnb_to_contracts(addr, "toAddress", golive_hex, latest_hex))
 
 
 def main():
@@ -99,19 +109,14 @@ def main():
         pass
     base = json.load(open(BASE_F)) if os.path.exists(BASE_F) else {}
     lazy = json.load(open(LAZY_F)) if os.path.exists(LAZY_F) else {}
-    apparent = {}
-    try:
-        for row in json.load(open(LB_F)).get("rows", []):
-            apparent[row["agent"].lower()] = row.get("ret_pct")
-    except Exception:
-        pass
-
     def baseline_of(a):
         gb = base.get(a, 0) or 0
         return gb if gb >= 0.1 else (lazy.get(a, gb) or 0)
 
-    targets = [a for a in agents if baseline_of(a) < BASELINE_MAX
-               and (apparent.get(a) is None or apparent.get(a) >= MIN_APPARENT_RET)]
+    # The BNB->eligible artifact is only material on a small base (a $9 conversion is noise on a
+    # $400 wallet, decisive on a $3 one). Scan every low-base wallet -- both net buyers (deposit)
+    # and net sellers (withdrawal) need correcting, so we can't pre-filter on the apparent return.
+    targets = [a for a in agents if baseline_of(a) < BASELINE_MAX]
     if not targets:
         return
 
@@ -124,15 +129,15 @@ def main():
     out = json.load(open(OUT_F)) if os.path.exists(OUT_F) else {}
     for a in targets:
         try:
-            usd = round(bnb_deposit_bnb(a, hex(golive), hex(latest)) * bnb_px, 2)
-            if usd > 0:
+            usd = round(net_bnb_into_eligible(a, hex(golive), hex(latest)) * bnb_px, 2)
+            if abs(usd) >= 0.01:
                 out[a] = usd
             else:
                 out.pop(a, None)
         except Exception as e:
             print("bnb_deposits: %s -> %s" % (a[:10], str(e)[:80]), file=sys.stderr)
     json.dump(out, open(OUT_F, "w"))
-    print("bnb_deposits: scanned %d wallets @ $%.0f/BNB, %d with deposits, total $%.2f"
+    print("bnb_deposits: scanned %d wallets @ $%.0f/BNB, %d with BNB conversion, net $%.2f"
           % (len(targets), bnb_px, len(out), sum(out.values())))
 
 
