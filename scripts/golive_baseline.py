@@ -60,19 +60,8 @@ def main():
     except Exception:
         pass
     tokens, prices, decimals = L.load_tokens()
-    syms = list(tokens)
-    pairs = [(tokens[s], L.SEL_BAL + "0" * 24 + ag[2:]) for ag in agents for s in syms]
-    res = mc_at_block(pairs, block)
-    vals, k = {}, 0
-    for ag in agents:
-        tot = 0.0
-        for s in syms:
-            r = res[k]; k += 1
-            if r and r != "0x":
-                usd = (int(r, 16) / (10 ** decimals.get(s, 18))) * float(prices.get(s, 0) or 0)
-                if usd > 0.01:
-                    tot += usd
-        vals[ag] = round(tot, 2)
+    # value the go-live block with the SAME logic as the live board (incl. native BNB)
+    vals, _ = L.value_agents(agents, tokens, prices, decimals, block=hex(block))
     json.dump(vals, open(L.BASE_F, "w"))
     json.dump({"block": block, "ts": GO_LIVE}, open(os.path.join(L.ROOT, "dashboard", "golive.json"), "w"))
     funded = sum(1 for v in vals.values() if v > 5)

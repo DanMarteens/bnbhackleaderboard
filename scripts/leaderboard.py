@@ -30,6 +30,7 @@ TOPIC_REG = "0x" + keccak(b"Registered(address)").hex()
 TOPIC_TRANSFER = "0x" + keccak(b"Transfer(address,address,uint256)").hex()
 SEL_BAL = "0x70a08231"            # balanceOf(address)
 SEL_DEC = "0x313ce567"            # decimals()
+SEL_ETHBAL = "0x4d2301cc"         # Multicall3.getEthBalance(address) -> native BNB
 PART_F = os.path.join(ROOT, "dashboard", "participants.json")
 BASE_F = os.path.join(ROOT, "dashboard", "lb_baseline.json")
 DEC_F = os.path.join(ROOT, "dashboard", "lb_decimals.json")
@@ -215,12 +216,12 @@ def token_decimals(tokens):
     return cache
 
 
-def multicall(pairs):
+def multicall(pairs, block="latest"):
     """pairs = [(target, calldata_hex), ...] -> [returndata_hex|None]. One Multicall3
-    eth_call returns hundreds of results, so the whole 55-agent valuation is ~5
-    requests. Runs on the FREE public RPC (keeps NodeReal CUs untouched); the archive
-    key is only a fallback if the free RPC chokes."""
-    urls = [FREE_RPC] + ([RPC] if RPC else [])
+    eth_call returns hundreds of results, so the whole field valuation is ~5 requests.
+    `latest` runs on the FREE public RPC (keeps NodeReal CUs untouched); a historical
+    block (for the go-live baseline) needs the archive RPC, which free nodes prune."""
+    urls = ([RPC] if (block != "latest" and RPC) else [FREE_RPC] + ([RPC] if RPC else []))
     out = []
     for i in range(0, len(pairs), 600):
         chunk = pairs[i:i + 600]
@@ -231,7 +232,7 @@ def multicall(pairs):
             for _ in range(2):
                 try:
                     r = _post({"jsonrpc": "2.0", "id": 1, "method": "eth_call",
-                               "params": [{"to": MULTICALL3, "data": data}, "latest"]}, url).get("result")
+                               "params": [{"to": MULTICALL3, "data": data}, block]}, url).get("result")
                     if r and r != "0x":
                         dec = abi_decode(["(bool,bytes)[]"], bytes.fromhex(r[2:]))[0]
                         got = ["0x" + rd.hex() if ok else None for ok, rd in dec]
@@ -244,13 +245,19 @@ def multicall(pairs):
     return out
 
 
-def value_agents(agents, tokens, prices, decimals):
-    """Returns (totals{agent:usd}, holdings{agent:[[sym,usd], ...] top by value})."""
+def value_agents(agents, tokens, prices, decimals, block="latest"):
+    """Returns (totals{agent:usd}, holdings{agent:[[sym,usd], ...] top by value}).
+
+    Counts BEP-20 balances AND native BNB (via Multicall3.getEthBalance) — otherwise an
+    agent that swaps into native BNB looks like it lost value, and one funded in BNB looks
+    inflated. `block` lets the same logic value a historical block for the go-live baseline."""
     syms = list(tokens)
     pairs = [(tokens[s], SEL_BAL + "0" * 24 + ag[2:]) for ag in agents for s in syms]
-    res = multicall(pairs)
+    res = multicall(pairs, block)
+    nat = multicall([(MULTICALL3, SEL_ETHBAL + "0" * 24 + ag[2:]) for ag in agents], block)
+    bnb_px = float(prices.get("WBNB") or prices.get("BNB") or 0)
     vals, holds, k = {}, {}, 0
-    for ag in agents:
+    for i, ag in enumerate(agents):
         tot, hh = 0.0, []
         for s in syms:
             r = res[k]; k += 1
@@ -259,6 +266,12 @@ def value_agents(agents, tokens, prices, decimals):
                 if usd > 0.01:
                     tot += usd
                     hh.append([s, round(usd, 2)])
+        rb = nat[i] if i < len(nat) else None
+        if rb and rb != "0x" and bnb_px > 0:
+            bnb_usd = int(rb, 16) / 1e18 * bnb_px
+            if bnb_usd > 0.01:
+                tot += bnb_usd
+                hh.append(["BNB", round(bnb_usd, 2)])
         vals[ag] = round(tot, 2)
         holds[ag] = sorted(hh, key=lambda x: -x[1])[:8]
     return vals, holds
@@ -429,6 +442,18 @@ def main():
             baseline = json.load(open(BASE_F))
         except Exception:
             baseline = {}
+        # Lazy baseline for agents funded only AFTER go-live (go-live value ~0 -> return is
+        # undefined). Freeze their baseline at the first funded snapshot so they're ranked
+        # on return-since-funding instead of showing "—". Set once, then persisted.
+        changed = False
+        for a in agents:
+            if (baseline.get(a, 0) or 0) < MINCAP and vals.get(a, 0) >= MINCAP:
+                baseline[a] = vals.get(a, 0); changed = True
+        if changed:
+            try:
+                json.dump(baseline, open(BASE_F, "w"))
+            except Exception:
+                pass
 
     # ---- one on-chain pass: net deposits (capital base) + who traded today ----
     flows = {a: 0.0 for a in agents}
@@ -494,7 +519,7 @@ def main():
         return int(st), int(st + 86400)
 
     def winret(s, secs):           # return over a rolling window (deposit-adjusted series)
-        if len(s) < 2:
+        if len(s) < 2 or s[0][0] > now - secs:   # not a full window of history yet -> "—"
             return None
         past = next((v for t, v in s if t >= now - secs), s[0][1])
         if not past or past < MINCAP:
