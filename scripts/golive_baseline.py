@@ -9,7 +9,7 @@ first BSC block at/after that instant and values every agent's BEP-20 portfolio
 Writes dashboard/lb_baseline.json + dashboard/golive.json. Run once; commit the
 result so the scheduled job never re-snapshots it. Needs ARCHIVE_RPC.
 """
-import sys, os, json, datetime as dt
+import sys, os, json, time, datetime as dt
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
 import leaderboard as L
 from eth_abi import encode as abi_encode, decode as abi_decode
@@ -60,8 +60,16 @@ def main():
     except Exception:
         pass
     tokens, prices, decimals = L.load_tokens()
-    # value the go-live block with the SAME logic as the live board (incl. native BNB)
-    vals, _ = L.value_agents(agents, tokens, prices, decimals, block=hex(block))
+    # Value the go-live block with the live-board logic. The archive RPC randomly drops
+    # calls under load (it corrupts big holders to a fraction of their value), so run a few
+    # passes and take the per-agent MAX — a drop under-values, so max recovers the truth.
+    vals = {}
+    for p in range(4):
+        vp, _ = L.value_agents(agents, tokens, prices, decimals, block=hex(block))
+        for a in agents:
+            vals[a] = max(vals.get(a, 0.0), vp.get(a, 0.0))
+        time.sleep(2)
+        print("  pass %d done | total so far $%.2f" % (p + 1, sum(vals.values())))
     json.dump(vals, open(L.BASE_F, "w"))
     json.dump({"block": block, "ts": GO_LIVE}, open(os.path.join(L.ROOT, "dashboard", "golive.json"), "w"))
     funded = sum(1 for v in vals.values() if v > 5)

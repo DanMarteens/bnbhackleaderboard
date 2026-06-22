@@ -359,8 +359,9 @@ def multicall(pairs, block="latest"):
 def value_agents(agents, tokens, prices, decimals, block="latest"):
     """Returns (totals{agent:usd}, holdings{agent:[[sym,usd], ...] top by value}).
 
-    Counts only ELIGIBLE BEP-20 balances. Native BNB / WBNB are NOT on the eligible list,
-    so they are deliberately excluded (they're the gas token, not a scored asset).
+    Counts eligible BEP-20 balances AND native BNB. Native BNB must be valued or an agent
+    that holds BNB at go-live and swaps it to tokens shows a fake gain (token->BNB a fake
+    loss); counting it both at baseline and now makes BNB<->token rebalances neutral.
     `block` lets the same logic value a historical block for the go-live baseline."""
     syms = list(tokens)
     pairs = [(tokens[s], SEL_BAL + "0" * 24 + ag[2:]) for ag in agents for s in syms]
@@ -589,6 +590,14 @@ def main():
         except Exception:
             dsb = gl
         flows, swaps = scan_activity(agents, gl, dsb, tokens, prices, decimals)
+
+    # Cap funded_credit at the actually-DETECTED inflow. The credit only exists to undo a
+    # double-count (funding counted as BOTH baseline and deposit). If the funding came via a
+    # contract (not detected as a flow), there's nothing to undo -> capping prevents an
+    # over-subtraction that otherwise shows late funders at a fake +100%.
+    for a in agents:
+        if funded_credit.get(a):
+            funded_credit[a] = min(funded_credit[a], max(0.0, flows.get(a, 0.0)))
 
     # ---- history time-series (append + cap) -> enables sparklines/24h/drawdown ----
     try:
