@@ -136,21 +136,13 @@ def load_tokens():
         cfg = __import__("yaml").safe_load(open(os.path.join(ROOT, "config.yaml")))
         tokens = dict(cfg["twak"]["token_contracts"])
     tokens.setdefault("USDT", USDT)
-    cmc_syms = set()
-    try:                                            # PRIMARY: live CMC prices (bot's cache)
-        mc = os.environ.get("MARKET_CACHE", os.path.join(ROOT, "dashboard", "_market_cache.json"))
-        fresh = json.load(open(mc)).get("prices", {})
-        for k, v in fresh.items():
-            if v:
-                prices[k] = v; cmc_syms.add(k)
+    # PRIMARY and only live source: CoinMarketCap via the MCP key, for the WHOLE eligible
+    # universe (ids resolved + cached once, quotes batched, cached 10 min). The resolved
+    # file's static priceUsd remains only as a fallback for any symbol CMC can't return.
+    try:
+        prices.update({k: v for k, v in cmc_prices(list(tokens)).items() if v})
     except Exception:
         pass
-    # CoinGecko (by BSC contract) fills every eligible token the CMC cache doesn't cover —
-    # the bot only pulls its ~40-token trading universe, so this gives live prices for the
-    # other ~100 eligible tokens (UNI, KAVA, ...). Cached 10 min, so rate-limit safe.
-    gap = {s: tokens[s] for s in tokens if s not in cmc_syms}
-    if gap:
-        prices.update(coingecko_prices(gap))
     for s in tokens:
         if s in STABLES:
             prices[s] = 1.0
@@ -178,6 +170,119 @@ def _cache_put(name, v):
                   open(os.path.join(ROOT, "dashboard", "_c_" + name + ".json"), "w"))
     except Exception:
         pass
+
+
+CMC_IDS_F = os.path.join(ROOT, "config", "cmc_ids.json")
+CMC_MCP_URL = os.environ.get("CMC_MCP_URL", "https://mcp.coinmarketcap.com/mcp")
+
+
+def _mcp_call(method, params, session_id=None):
+    """One JSON-RPC call to the CoinMarketCap MCP. Returns (data, session_id)."""
+    key = os.environ.get("CMC_MCP_API_KEY", "")
+    hdrs = {"X-CMC-MCP-API-KEY": key, "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream"}
+    if session_id:
+        hdrs["Mcp-Session-Id"] = session_id
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
+    resp = urllib.request.urlopen(urllib.request.Request(CMC_MCP_URL, body, hdrs), timeout=45)
+    sid = resp.headers.get("Mcp-Session-Id") or resp.headers.get("mcp-session-id")
+    text = resp.read().decode()
+    data = {}
+    if "text/event-stream" in resp.headers.get("content-type", ""):
+        for line in text.splitlines():
+            if line.startswith("data:"):
+                data = json.loads(line[5:].strip()); break
+    elif text.strip():
+        data = json.loads(text)
+    return data, sid
+
+
+def _cmc_session():
+    data, sid = _mcp_call("initialize", {"protocolVersion": "2024-11-05", "capabilities": {},
+                                         "clientInfo": {"name": "lb", "version": "1"}})
+    if not sid and isinstance(data, dict):
+        sid = data.get("result", {}).get("sessionId")
+    try:
+        _mcp_call("notifications/initialized", {}, sid)
+    except Exception:
+        pass
+    return sid
+
+
+def _cmc_tool(name, args, sid):
+    data, _ = _mcp_call("tools/call", {"name": name, "arguments": args}, sid)
+    res = data.get("result", {}) if isinstance(data, dict) else {}
+    content = res.get("content", res)
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                try:
+                    return json.loads(item["text"])
+                except Exception:
+                    return item.get("text")
+    return content
+
+
+def cmc_resolve_ids(symbols):
+    """symbol -> CMC numeric id, via search_cryptos. Cached permanently (ids are stable)."""
+    try:
+        ids = json.load(open(CMC_IDS_F))
+    except Exception:
+        ids = {}
+    missing = [s for s in symbols if s not in ids]
+    if missing:
+        try:
+            sid = _cmc_session()
+            for s in missing:
+                try:
+                    r = _cmc_tool("search_cryptos", {"query": s}, sid) or []
+                    exact = [x for x in r if isinstance(x, dict) and x.get("symbol") == s]
+                    pool = exact or [x for x in r if isinstance(x, dict)]
+                    ids[s] = (sorted(pool, key=lambda x: x.get("rank") or 1e9)[0].get("id")
+                              if pool else None)
+                except Exception:
+                    ids[s] = ids.get(s)
+                time.sleep(0.05)
+            json.dump(ids, open(CMC_IDS_F, "w"))
+        except Exception as e:
+            print("cmc id resolve failed:", e)
+    return {s: ids.get(s) for s in symbols if ids.get(s)}
+
+
+def cmc_prices(symbols):
+    """Live USD prices from the CoinMarketCap MCP (our key) for the eligible universe.
+    Resolves ids once (cached), then batches get_crypto_quotes_latest. Cached 10 min."""
+    cached = _cache_get("cmc", 600)
+    if cached is not None:
+        return cached
+    if not os.environ.get("CMC_MCP_API_KEY"):
+        return {}
+    idmap = cmc_resolve_ids(symbols)
+    if not idmap:
+        return {}
+    id2sym = {str(v): k for k, v in idmap.items()}
+    out = {}
+    try:
+        sid = _cmc_session()
+        ids = list(id2sym.keys())
+        for i in range(0, len(ids), 80):
+            r = _cmc_tool("get_crypto_quotes_latest", {"id": ",".join(ids[i:i + 80])}, sid)
+            rows = []
+            if isinstance(r, dict) and "rows" in r:
+                hdr = r.get("headers", [])
+                rows = [dict(zip(hdr, row)) for row in r["rows"]]
+            elif isinstance(r, list):
+                rows = r
+            for q in rows:
+                sym, px = id2sym.get(str(q.get("id"))), q.get("price")
+                if sym and px:
+                    out[sym] = float(px)
+            time.sleep(0.1)
+        if out:
+            _cache_put("cmc", out)
+    except Exception as e:
+        print("cmc prices failed:", e)
+    return out
 
 
 def coingecko_prices(tokens):
