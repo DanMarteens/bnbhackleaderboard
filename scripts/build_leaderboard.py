@@ -78,7 +78,7 @@ background:
 .sel:focus{border-color:rgba(56,97,251,.6);box-shadow:0 0 0 3px rgba(56,97,251,.13)}
 .sel option{background:#0d1430;color:var(--txt)}
 .tbl{overflow:hidden;background:var(--glass);border:1px solid var(--line);border-radius:20px;backdrop-filter:blur(24px);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.06)}
-.thead,.row{display:grid;grid-template-columns:46px 1.6fr 120px 120px 150px;align-items:center;gap:12px;padding:14px 18px}
+.thead,.row{display:grid;grid-template-columns:46px 1.6fr 112px 116px 78px 140px;align-items:center;gap:11px;padding:14px 18px}
 .pnlcol{font-weight:800;font-size:15.5px}.thead .pnlcol{font-weight:700;font-size:10.5px}
 .thead{border-bottom:1px solid var(--line);font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
 .thead span{cursor:pointer;transition:.15s}.thead span:hover{color:var(--gold2)}
@@ -111,7 +111,7 @@ background:
 .foot a{color:var(--gold2);text-decoration:none}.foot a:hover{text-decoration:underline}
 .by{margin-top:6px;font-size:12.5px}
 @media(max-width:680px){.mark{font-size:15px}.h1{font-size:30px}.thead,.row{grid-template-columns:30px 1fr 80px 74px;gap:8px}
- .ddcol{display:none}.pnlcol{font-size:14px}.bad{grid-template-columns:1fr}.tools{flex-direction:column;align-items:stretch}#minv{width:100%}}
+ .trcol,.ddcol{display:none}.pnlcol{font-size:14px}.bad{grid-template-columns:1fr}.tools{flex-direction:column;align-items:stretch}#minv{width:100%}}
 </style></head><body><div class="wrap">
 <div class="hero">
   <div class="mark">BNB HACK</div>
@@ -199,7 +199,7 @@ function badges(){const f=R.filter(r=>r.value>0);if(!f.length){$('badges').inner
  if(STARTED&&safe)c.push(card('🛡️ Lowest drawdown',safe,safe.dd_pct.toFixed(1)+'%'));
  $('badges').innerHTML=c.join('');}
 if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
-const cols=[['#','rank',1],['Agent','agent',0],['Value','value',1],['PnL','ret_pct',1,'pnlcol'],['Drawdown','dd_pct',1,'ddcol']];
+const cols=[['#','rank',1],['Agent','agent',0],['Value','value',1],['PnL','ret_pct',1,'pnlcol'],['Trades','trades',1,'trcol'],['Drawdown','dd_pct',1,'ddcol']];
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
 function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
@@ -212,7 +212,7 @@ function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>
    ${r.dep>1?`<span class="dep" title="external deposits since go-live — excluded from PnL">+$${r.dep>=1000?Math.round(r.dep).toLocaleString():Math.round(r.dep)} dep</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="vv">${fmt(r.value)}</div><div class="vv pnlcol">${pct(winv(r))}</div>
-  <div class="ddcol">${dq(r.dd_pct||0)}</div></div>
+  <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="ddcol">${dq(r.dd_pct||0)}</div></div>
   <div class="det"><div class="dethold">${h}</div></div></div>`;}
 function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
