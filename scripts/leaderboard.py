@@ -30,7 +30,6 @@ TOPIC_REG = "0x" + keccak(b"Registered(address)").hex()
 TOPIC_TRANSFER = "0x" + keccak(b"Transfer(address,address,uint256)").hex()
 SEL_BAL = "0x70a08231"            # balanceOf(address)
 SEL_DEC = "0x313ce567"            # decimals()
-SEL_ETHBAL = "0x4d2301cc"         # Multicall3.getEthBalance(address) -> native BNB
 PART_F = os.path.join(ROOT, "dashboard", "participants.json")
 BASE_F = os.path.join(ROOT, "dashboard", "lb_baseline.json")
 DEC_F = os.path.join(ROOT, "dashboard", "lb_decimals.json")
@@ -113,17 +112,13 @@ STABLES = {"USDT", "USDC", "DAI", "TUSD", "FDUSD", "USD1", "USDe", "FRAX", "FRXU
 
 
 def load_tokens():
-    """Broad set (125 resolved eligible tokens) for accurate valuation: address +
-    decimals from bsc_contracts.json.
+    """Eligible-token universe for valuation: address + decimals from bsc_contracts.json,
+    with USD prices.
 
-    Prices, in priority order:
-      1. CoinMarketCap (live) — the bot already pulls these via the CMC MCP into the
-         shared market cache (MARKET_CACHE / dashboard/_market_cache.json). This is the
-         primary, on-brand source and covers the liquid tradeable universe agents hold.
-      2. The resolved file's static priceUsd — fallback for the long tail.
-      3. CoinGecko — only an opt-in last resort (LB_USE_COINGECKO=1) for anything still
-         unpriced; off by default so we don't depend on it.
-      Stablecoins are pinned to 1."""
+    Prices come from CoinMarketCap via the CMC MCP (cmc_prices) for the whole universe —
+    ids are resolved once and cached, quotes are batched and cached ~10 min. The resolved
+    file's static priceUsd is the only fallback for a symbol CMC can't return; stablecoins
+    are pinned to 1. Native BNB / WBNB are not on the 149-token eligible list -> not valued."""
     bc = os.path.join(ROOT, "config", "bsc_contracts.json")
     tokens, decimals, prices = {}, {}, {}
     if os.path.exists(bc):
@@ -150,9 +145,9 @@ def load_tokens():
     return tokens, prices, decimals
 
 
-CACHE_TTL = int(os.environ.get("LB_CACHE_TTL", "300"))   # 5 min -> a 60s loop reuses
-# expensive results (CoinGecko prices, getLogs flow/trade scans) instead of refetching
-# every tick. Re-valuation (Multicall3, keyless) still happens every run.
+CACHE_TTL = int(os.environ.get("LB_CACHE_TTL", "300"))   # 5 min -> a 60s loop reuses the
+# expensive results (CMC quotes, getLogs flow/trade scans) instead of refetching every tick.
+# Re-valuation (Multicall3, keyless) still happens every run, so values stay fresh.
 
 
 def _cache_get(name, ttl=CACHE_TTL):
@@ -283,33 +278,6 @@ def cmc_prices(symbols):
             _cache_put("cmc", out)
     except Exception as e:
         print("cmc prices failed:", e)
-    return out
-
-
-def coingecko_prices(tokens):
-    """Current USD prices by BSC contract address (free, no key). Returns {sym: price}
-    for whatever resolves; callers keep prior prices for the rest. Cached CACHE_TTL s."""
-    cached = _cache_get("cg", 600)         # prices move slowly -> 10-min cache (rate-limit safe)
-    if cached is not None:
-        return cached
-    addr_sym = {a.lower(): s for s, a in tokens.items()}
-    addrs = list(addr_sym)
-    out = {}
-    for i in range(0, len(addrs), 100):
-        chunk = addrs[i:i + 100]
-        url = ("https://api.coingecko.com/api/v3/simple/token_price/binance-smart-chain"
-               "?contract_addresses=" + ",".join(chunk) + "&vs_currencies=usd")
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            data = json.load(urllib.request.urlopen(req, timeout=40))
-            for a, v in data.items():
-                if v.get("usd") and a.lower() in addr_sym:
-                    out[addr_sym[a.lower()]] = float(v["usd"])
-        except Exception:
-            pass
-        time.sleep(2.5)
-    if out:
-        _cache_put("cg", out)
     return out
 
 
@@ -614,14 +582,6 @@ def main():
         # without an "f" field predate the event, where flow is 0 anyway.
         return [(h["ts"], h["v"].get(a, 0.0) - h.get("f", {}).get(a, 0.0)) for h in hist]
 
-    def chg24h(s):
-        if len(s) < 2:
-            return None
-        cutoff = now - 86400
-        past = next((v for t, v in s if t >= cutoff), s[0][1])
-        cur = s[-1][1]
-        return round((cur / past - 1) * 100, 2) if past else None
-
     def drawdown(s):
         peak = dd = 0.0
         for _, v in s:
@@ -630,26 +590,11 @@ def main():
                 dd = max(dd, (peak - v) / peak)
         return round(dd * 100, 2)
 
-    def spark(s, k=24):
-        vs = [v for _, v in s]
-        if len(vs) <= k:
-            return [round(v, 4) for v in vs]
-        step = len(vs) / k
-        return [round(vs[min(len(vs) - 1, int(i * step))], 4) for i in range(k)]
-
     import datetime as _dt
     HACK_DAYS = 7                  # Jun 22..28 UTC -> Day 1..Day 7
     def _day_bounds(n):            # n=1..7 -> (start_ts, end_ts) UTC; Day 1 = Jun 22
         st = _dt.datetime(2026, 6, 21 + n, tzinfo=_dt.timezone.utc).timestamp()
         return int(st), int(st + 86400)
-
-    def winret(s, secs):           # return over a rolling window (deposit-adjusted series)
-        if len(s) < 2 or s[0][0] > now - secs:   # not a full window of history yet -> "—"
-            return None
-        past = next((v for t, v in s if t >= now - secs), s[0][1])
-        if not past or past < MINCAP:
-            return None
-        return round((s[-1][1] / past - 1) * 100, 2)
 
     def _at_or_before(s, ts):      # last snapshot value with t <= ts (s ascending)
         val = None
@@ -682,14 +627,13 @@ def main():
         # a late funder's baseline, so it isn't also subtracted as a deposit (the -100% bug).
         f = flows.get(a, 0.0) - funded_credit.get(a, 0.0)
         allret = round(((v - f) / b - 1) * 100, 2) if b > MINCAP else None
-        win = {"1h": winret(s, 3600), "24h": winret(s, 86400), "all": allret}
+        win = {"all": allret}                          # All + Day 1..Day 7 (UTC days)
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, b)
         rows.append({"agent": a, "value": v, "dep": round(f, 2),
                      "trades": swaps.get(a, 0), "traded": swaps.get(a, 0) >= 1,
-                     "ret_pct": allret, "chg24h": winret(s, 86400),
-                     "dd_pct": drawdown(s), "spark": spark(s), "holds": holds.get(a, []),
-                     "win": win})
+                     "ret_pct": allret, "dd_pct": drawdown(s),
+                     "holds": holds.get(a, []), "win": win})
     if baseline:   # live: active traders first (>=1 swap today), then by return; ties neutral
         rows.sort(key=lambda r: (not r["traded"],
                                  -(r["ret_pct"] if r["ret_pct"] is not None else -1e9), r["agent"]))
@@ -716,7 +660,7 @@ def main():
 
     print(f"participants {len(agents)} | baseline {has_base} | funded {stats['funded']} | deployed ${stats['deployed']}")
     for r in rows[:8]:
-        print(f"  #{r['rank']:>2} {r['agent']} ${r['value']} ret={r['ret_pct']} 24h={r['chg24h']} dd={r['dd_pct']}")
+        print(f"  #{r['rank']:>2} {r['agent']} ${r['value']} ret={r['ret_pct']} trades={r['trades']} dd={r['dd_pct']}")
 
 
 if __name__ == "__main__":
