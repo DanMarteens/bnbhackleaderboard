@@ -1,0 +1,9 @@
+{
+  "_note": "Eligible symbols with no BSC contract we could confirm. CMC MCP exposes only the token's primary chain (none BSC) and on-chain symbol() at candidate peg addresses did not match. Holdings in these are valued $0 until a verified BEP-20 address is supplied. 144/148 eligible symbols are covered.",
+  "unresolved": {
+    "H": "Humanity (id 36922) — primary Ethereum, no BSC deployment found",
+    "LUNC": "Terra Classic (id 4172) — 0x156ab3... resolves to symbol LUNA, not LUNC; rejected",
+    "FRXUSD": "Frax USD (id 36039) — primary Ethereum/Sonic, no BSC deployment found",
+    "VCNT": "ViciCoin (id 28656) — primary Ethereum/Polygon, no BSC deployment found"
+  }
+}

@@ -126,11 +126,18 @@ def load_tokens():
     tokens, decimals, prices = {}, {}, {}
     if os.path.exists(bc):
         d = json.load(open(bc))
+        seen_addr = {}                                          # contract -> first symbol mapped
         for s, v in d.items():
-            if v.get("address"):
-                tokens[s] = v["address"]
-                decimals[s] = v.get("decimals", 18)
-                prices[s] = float(v.get("priceUsd", 0) or 0)   # static fallback base
+            addr = v.get("address")
+            if not addr:
+                continue
+            al = addr.lower()
+            if al in seen_addr:                                 # dedupe: same contract under two
+                continue                                        # symbols (e.g. USDf/USDF) -> count once
+            seen_addr[al] = s
+            tokens[s] = addr
+            decimals[s] = v.get("decimals", 18)
+            prices[s] = float(v.get("priceUsd", 0) or 0)        # static fallback base
     else:
         cfg = __import__("yaml").safe_load(open(os.path.join(ROOT, "config.yaml")))
         tokens = dict(cfg["twak"]["token_contracts"])

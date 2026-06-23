@@ -880,5 +880,131 @@
 "priceUsd": 3.5,
 "ambiguous": false,
 "stable": false
+},
+"TON": {
+"address": "0x76A797A59Ba2C17726896976B7B3747BfD1d220f",
+"decimals": 9,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"USD1": {
+"address": "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": true
+},
+"USDe": {
+"address": "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"SHIB": {
+"address": "0xb1547683DA678f2e1F003A780143EC10Af8a832B",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"STABLE": {
+"address": "0x011EBe7d75E2C9D1E0bD0be0bEf5C36f0A90075F",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"BONK": {
+"address": "0xA697e272a73744b343528C3Bc4702F2565b2F422",
+"decimals": 5,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"NFT": {
+"address": "0x20ee7b720f4e4c4ffcb00c4065cdae55271aecca",
+"decimals": 6,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"FLOKI": {
+"address": "0xfb5b838b6cfeedc2873ab27866079ac55363d37e",
+"decimals": 9,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"B": {
+"address": "0x6bdcce4a559076e37755a78ce0c06214e59e4444",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"NEX": {
+"address": "0x365de036a1f7dccb621530d517133521debb2013",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"GENIUS": {
+"address": "0x1F12B85aAC097E43Aa1555b2881E98a51090e9A6",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"IP": {
+"address": "0x4d6394bc3031f751edce368c189b0e060b527107",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"CHEEMS": {
+"address": "0x0df0587216a4a1bb7d5082fdc491d93d2dd4b413",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"BANANAS31": {
+"address": "0x3d4f0513e8a29669b960f9dbca61861548a9a760",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"HTX": {
+"address": "0x61ec85ab89377db65762e234c946b5c25a56e99e",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"SMILEK": {
+"address": "0x4f9d3AdbfAF4579518b1Ca7E06468A363897B997",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"BabyDoge": {
+"address": "0xc748673057861a797275cd8a068abb95a902e8de",
+"decimals": 9,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
+},
+"EURI": {
+"address": "0x9d1a7a3191102e9f900faa10540837ba84dcbae7",
+"decimals": 18,
+"priceUsd": 0.0,
+"ambiguous": true,
+"stable": false
 }
 }
