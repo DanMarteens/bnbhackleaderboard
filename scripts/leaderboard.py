@@ -439,9 +439,21 @@ def value_agents(agents, tokens, prices, decimals, block="latest"):
     res = multicall(pairs, block)
     vals, holds, k = {}, {}, 0
     for ag in agents:
+        agent_res = res[k:k + len(syms)]
+        k += len(syms)
+        # If the Multicall chunk failed for this agent, every token result is None.
+        # A real empty wallet returns ERC-20 zero bytes, not None. Retry direct
+        # eth_call for this one wallet so an RPC/Multicall miss cannot zero a
+        # funded portfolio and incorrectly DQ/rerank it.
+        if agent_res and all(r is None for r in agent_res):
+            direct = rpc_batch([
+                ("eth_call", [{"to": tokens[s], "data": SEL_BAL + "0" * 24 + ag[2:]}, block])
+                for s in syms
+            ])
+            if any(r is not None for r in direct):
+                agent_res = direct
         tot, hh = 0.0, []
-        for s in syms:
-            r = res[k]; k += 1
+        for s, r in zip(syms, agent_res):
             if r and r != "0x":
                 usd = (int(r, 16) / (10 ** decimals.get(s, 18))) * float(prices.get(s, 0) or 0)
                 if usd > 0.01:
