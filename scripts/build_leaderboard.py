@@ -114,6 +114,7 @@ background:
 .tradebox .tot{font:800 13px/1 var(--mono)}
 .days{font:700 10px/1 var(--mono);color:var(--mut);white-space:nowrap}
 .days .miss{color:var(--r)}
+.days .future{color:rgba(133,144,173,.45)}
 .det{max-height:0;overflow:hidden;transition:max-height .3s ease}.det.open{max-height:200px}
 .dethold{display:flex;flex-wrap:wrap;gap:7px;padding:2px 18px 15px}
 .chip{background:var(--glass2);border:1px solid var(--line);border-radius:10px;padding:5px 11px;font:600 11px/1 var(--mono);color:var(--mut)}
@@ -191,8 +192,10 @@ function dq(dd){const c=dd<10?'var(--mut)':dd<22?'var(--gold)':'var(--r)';
  return `<span class="dqv" style="color:${c}">${dd.toFixed(1)}%</span>`;}
 function tradeDays(r){const ds=(r.daily_trades||[]).slice(0,7);
  if(!LIVE||!ds.length)return `<div class="tradebox"><span class="tot">${r.trades||0}</span></div>`;
- const seq=ds.map(n=>n>0?String(n):'<span class="miss">0</span>').join('/');
- return `<div class="tradebox" title="Strict eligible-token swaps by UTC day: ${ds.map((n,i)=>'D'+(i+1)+'='+n).join(', ')}"><span class="tot">${r.trades||0}</span><span class="days">${seq}</span></div>`;}
+ const full=Array.from({length:7},(_,i)=>i<ds.length?ds[i]:null);
+ const seq=full.map(n=>n==null?'<span class="future">–</span>':n>0?String(n):'<span class="miss">0</span>').join('/');
+ const title=full.map((n,i)=>'D'+(i+1)+'='+(n==null?'not started':n)).join(', ');
+ return `<div class="tradebox" title="Strict eligible-token swaps by UTC day: ${title}"><span class="tot">${r.trades||0}</span><span class="days">${seq}</span></div>`;}
 const START=Date.UTC(2026,5,22),END=Date.UTC(2026,5,29);
 function cd(){const n=Date.now();let t,l;if(n<START){t=START;l='Starts in';}else if(n<END){t=END;l='Time left';}else{$('cd').textContent='Competition ended';return;}
  const d=Math.max(0,t-n);$('cd').innerHTML=`${l} &nbsp;<b>${Math.floor(d/864e5)}d ${Math.floor(d%864e5/36e5)}h ${Math.floor(d%36e5/6e4)}m</b>`;}
