@@ -52,7 +52,7 @@ background:
  backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
 .st .v{font:800 15px/1 "Inter";letter-spacing:-.25px;color:#fff}
 .st .k{color:var(--mut);font-size:9px;letter-spacing:.12em;text-transform:uppercase;order:-1}
-.banner{padding:13px 16px;margin:0 0 18px;font-size:13px;color:var(--gold2);text-align:center;border-radius:16px;
+.banner{padding:13px 16px;margin:0 0 18px;font-size:13px;color:var(--gold2);text-align:left;border-radius:16px;
  background:linear-gradient(90deg,rgba(240,185,11,.1),rgba(240,185,11,.02));border:1px solid rgba(240,185,11,.25)}
 .bad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 22px}
 .b{padding:16px;background:var(--glass);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(20px);
@@ -117,7 +117,8 @@ background:
 .foot{color:var(--mut);font-size:12px;margin-top:18px;line-height:1.8;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.026);padding:0 14px}
 .foot summary{cursor:pointer;list-style:none;padding:13px 0;color:var(--txt);font-weight:700}.foot summary::-webkit-details-marker{display:none}
 .foot summary::after{content:"▾";float:right;color:var(--mut);transition:.15s}.foot[open] summary::after{transform:rotate(180deg)}
-.foot .fbody{border-top:1px solid rgba(255,255,255,.06);padding:12px 0 14px;text-align:center}.foot b{color:var(--txt)}
+.foot .fbody{border-top:1px solid rgba(255,255,255,.06);padding:12px 0 14px;text-align:left}.foot b{color:var(--txt)}
+.foot .fline{margin:7px 0}.foot .by{margin-top:12px}
 .foot a{color:var(--gold2);text-decoration:none}.foot a:hover{text-decoration:underline}
 .by{margin-top:6px;font-size:12.5px}
 @media(max-width:680px){body{padding:22px 10px 52px}.herohead{display:block}.cd{margin-top:14px}.mark{font-size:11px}.h1{font-size:30px}.stats{gap:7px}.st{padding:8px 10px}.bad{grid-template-columns:1fr}
@@ -159,11 +160,13 @@ background:
 </div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
 <details class="foot"><summary>Scoring methodology · updated <span id="upd"></span></summary>
-  <div class="fbody">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
-    Strict trade = eligible token in + eligible token out in the same transaction. Deposits, withdrawals and BNB conversions never count as trades.<br>
-    PnL uses transaction-time capital cost basis and a liquid BSC DEX guard for divergent CMC marks. ⚖ marks a guarded token.<br>
-    Click any row to expand token holdings. Drawdown is observed max peak-to-trough on the eligible portfolio curve, rebased on external capital flows.<br>
-    Refreshes every ~30 min · not affiliated with organizers.
+  <div class="fbody">
+    <div class="fline">Built from on-chain data · <b>permissionless &amp; verifiable</b>.</div>
+    <div class="fline">Strict trade = eligible token in + eligible token out in the same transaction. Deposits, withdrawals and BNB conversions never count as trades.</div>
+    <div class="fline">PnL uses transaction-time capital cost basis and a liquid BSC DEX guard for divergent CMC marks. ⚖ marks a guarded token.</div>
+    <div class="fline">Execution price, DEX fees and slippage are already reflected on-chain. Additional organizer simulated-cost rate is shown as 0 until an official rate is published.</div>
+    <div class="fline">Drawdown is observed max peak-to-trough on the eligible portfolio curve, rebased on external capital flows. Click any row to expand token holdings.</div>
+    <div class="fline">Refreshes every ~30 min · not affiliated with organizers.</div>
     <div class="by">built by <b><a href="https://x.com/itsabigdill" target="_blank" rel="noopener">@itsabigdill</a></b>
      · <a href="https://github.com/DanMarteens" target="_blank" rel="noopener">github</a>
      · <a href="https://cto.monster" target="_blank" rel="noopener">cto.monster</a></div>
@@ -206,7 +209,6 @@ function stats(){const rankedNow=R.filter(r=>ranked(r)).length;
   LIVE?['DQ line',(S.dq_pct||30)+'%']:null].filter(Boolean)
   .map(([k,v])=>`<div class="st"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');}
 if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
-else if((D.method||{}).sim_cost_bps===0){$('banner').className='banner';$('banner').innerHTML='Execution price, DEX fees and slippage are already reflected on-chain. The additional organizer simulated-cost rate is shown as 0 until an official rate is published.';}
 const cols=[['#','rank',1],['Agent','agent',0],['Value','value',1],['PnL','ret_pct',1,'pnlcol'],['Trades','trades',1,'trcol'],['Drawdown','dd_pct',1,'ddcol']];
 $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" data-k="${c[1]}">${c[0]}</span>`).join('');
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
