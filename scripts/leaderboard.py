@@ -43,6 +43,7 @@ LASTPX_F = os.path.join(ROOT, "dashboard", "last_prices.json")    # carry-forwar
 MAXHIST = 200          # hourly starts + current point; comfortably covers the event
 MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
 DQ = 0.30              # disqualification drawdown line
+REGISTRY_SCAN_START = 102000000  # before competition-contract deployment / first registration
 GO_LIVE_TS = 1782086400        # 2026-06-22 00:00:00 UTC
 HACK_DAYS = 7
 DEX_MIN_LIQUIDITY = float(os.environ.get("DEX_MIN_LIQUIDITY", "25000"))
@@ -87,7 +88,7 @@ def call_data(to, data):
     return ("eth_call", [{"to": to, "data": data}, "latest"])
 
 
-def enumerate_participants(start=104800000, step=40000):
+def enumerate_participants(start=REGISTRY_SCAN_START, step=40000):
     latest = int(rpc("eth_blockNumber", []), 16)
 
     def grab(b, e, depth=0):
@@ -671,6 +672,22 @@ def main():
             golive_base = json.load(open(BASE_F))     # IMMUTABLE go-live snapshot (never rewritten)
         except Exception:
             golive_base = {}
+        # Registrations existed well before the original hard-coded event scan range. When
+        # enumeration discovers one of those wallets, reconstruct only its missing go-live
+        # balance at the frozen block. Existing baselines remain immutable.
+        missing_base = [a for a in agents if a not in golive_base]
+        if missing_base and RPC:
+            try:
+                gj0 = json.load(open(GOLIVE_F))
+                gl0 = gj0.get("block")
+                if gl0:
+                    recovered, _ = value_agents(
+                        missing_base, tokens, prices, decimals, block=hex(int(gl0)))
+                    golive_base.update(recovered)
+                    json.dump(golive_base, open(BASE_F, "w"))
+                    print("recovered go-live baseline for", len(missing_base), "participants")
+            except Exception as e:
+                print("missing baseline recovery failed:", e)
         for a in agents:
             gb = golive_base.get(a, 0) or 0
             baseline[a] = gb

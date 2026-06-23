@@ -32,14 +32,7 @@ jobs:
         run: |
           GO_LIVE=$(date -u -d "2026-06-22 00:00:00" +%s)
           NOW=$(date -u +%s)
-          HOUR=$(date -u +%H)
           FLAGS=""
-          # Re-enumerate registrants once a day (registration stays open mid-event).
-          # Needs the archive RPC; skipped gracefully if the secret isn't set.
-          if [ "$HOUR" = "00" ] && [ -n "$ARCHIVE_RPC" ]; then
-            echo "daily re-enumeration of registrants"
-            FLAGS="$FLAGS --enumerate"
-          fi
           # Snapshot the baseline ONLY in the first 30 min after go-live. The frozen
           # baseline is committed to the repo, so this should never fire; the time guard
           # ensures a missing file later can't silently re-baseline (which would peg PnL to 0).
@@ -48,6 +41,11 @@ jobs:
             FLAGS="$FLAGS --baseline"
           fi
           echo "flags:$FLAGS"
+          # Manual production deployments always rebuild the immutable participant list
+          # from the full contract history. This must happen before cost-basis flows.
+          if [ -n "$ARCHIVE_RPC" ]; then
+            python scripts/leaderboard.py --enumerate
+          fi
           # Cost-basis flows must be refreshed before PnL. Otherwise a deposit can be
           # mistaken for profit in this manual fallback deployment.
           python scripts/flows_costbasis.py --force
