@@ -55,6 +55,25 @@ background:
 .st .k{color:var(--mut);font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-top:7px}
 .banner{padding:13px 16px;margin:0 0 18px;font-size:13px;color:var(--gold2);text-align:center;border-radius:16px;
  background:linear-gradient(90deg,rgba(240,185,11,.1),rgba(240,185,11,.02));border:1px solid rgba(240,185,11,.25)}
+.pod{display:none;margin:0 0 24px}
+.pod.on{display:block}
+.podtop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;color:var(--mut);
+ font:700 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase}
+.podtop b{color:var(--gold2)}
+.podgrid{display:grid;grid-template-columns:1.35fr repeat(4,1fr);gap:10px}
+.pcard{position:relative;overflow:hidden;min-height:118px;padding:15px;border-radius:20px;background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.025));
+ border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 16px 42px rgba(0,0,0,.28);cursor:pointer;transition:.18s}
+.pcard:hover{transform:translateY(-2px);border-color:rgba(240,185,11,.32)}
+.pcard::after{content:"";position:absolute;inset:auto -35% -55% auto;width:120px;height:120px;border-radius:50%;background:rgba(240,185,11,.12);filter:blur(10px)}
+.pcard.p1{min-height:140px;background:radial-gradient(140px 90px at 20% 0%,rgba(252,213,53,.22),transparent 70%),linear-gradient(160deg,rgba(240,185,11,.13),rgba(255,255,255,.035));border-color:rgba(240,185,11,.35)}
+.pmedal{display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;z-index:1}
+.pnum{font:900 24px/1 var(--mono);color:var(--gold2);letter-spacing:-.08em}.p1 .pnum{font-size:34px}
+.pamt{font:800 11px/1 var(--mono);color:#111;background:linear-gradient(135deg,var(--gold2),var(--gold));border-radius:999px;padding:6px 8px}
+.paddr{position:relative;z-index:1;margin-top:14px;font:700 13px/1 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.p1 .paddr{font-size:15px}
+.pmeta{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.pm{min-width:0}.pl{font:700 8px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:5px}
+.pv{font:800 12px/1 var(--mono);white-space:nowrap}.p1 .pv{font-size:13px}
+.pnote{position:relative;z-index:1;margin-top:12px;color:var(--mut);font-size:11px}
 .bad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 22px}
 .b{padding:16px;background:var(--glass);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(20px);
  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:transform .2s}.b:hover{transform:translateY(-3px)}
@@ -111,6 +130,7 @@ background:
 .foot a{color:var(--gold2);text-decoration:none}.foot a:hover{text-decoration:underline}
 .by{margin-top:6px;font-size:12.5px}
 @media(max-width:680px){body{padding:24px 10px 56px}.mark{font-size:15px}.h1{font-size:30px}.bad{grid-template-columns:1fr}
+ .podgrid{display:flex;overflow-x:auto;gap:10px;padding-bottom:6px;scroll-snap-type:x proximity}.pcard{min-width:210px;scroll-snap-align:start}.pcard.p1{min-width:245px}
  .tools{flex-direction:column;align-items:stretch}.selwrap,.sel{width:100%}#minv{width:100%}.thead{display:none}
  .tbl{border-radius:18px}.row{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"rank agent value" "rank pnl pnl" "rank trades dd";
   gap:8px 10px;padding:13px 12px;align-items:center}.row .n{grid-area:rank;align-self:start;padding-top:3px}.row .ag{grid-area:agent}
@@ -129,6 +149,7 @@ background:
 </div>
 <div class="stats" id="stats"></div>
 <div id="banner"></div>
+<div class="pod" id="podium"></div>
 <div class="tools">
   <input id="q" class="inp" placeholder="search agent address…"/>
   <input id="minv" class="inp" type="number" placeholder="min $"/>
@@ -187,6 +208,19 @@ function stats(){const rv=R.map(winv).filter(v=>v!=null),av=rv.length?rv.reduce(
   LIVE?['Avg PnL',av==null?'—':(av>=0?'+':'')+av.toFixed(2)+'%']:null,
   LIVE?['Risk-cleared',S.survivors+'/'+(S.eligible||S.n)]:null].filter(Boolean)
   .map(([k,v])=>`<div class="st"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');}
+function podium(){const top=R.filter(r=>ranked(r)).sort((a,b)=>(a._rk||99)-(b._rk||99)).slice(0,5);
+ if(!top.length){$('podium').className='pod';$('podium').innerHTML='';return;}
+ $('podium').className='pod on';
+ $('podium').innerHTML=`<div class="podtop"><span>🏁 Prize zone · <b>live top ${top.length}</b></span><span>click card to filter</span></div>
+  <div class="podgrid">${top.map(r=>`<div class="pcard p${r._rk}" onclick="$('q').value='${r.agent}';render();window.scrollTo({top:document.querySelector('.tools').offsetTop-12,behavior:'smooth'});">
+   <div class="pmedal"><div class="pnum">#${r._rk}</div><div class="pamt">${PRIZE[r._rk]||''}</div></div>
+   <div class="paddr">${short(r.agent)}</div>
+   <div class="pmeta"><div class="pm"><div class="pl">PnL</div><div class="pv ${winv(r)>0?'pos':winv(r)<0?'neg':'zero'}">${winv(r)>0?'+':''}${(winv(r)||0).toFixed(2)}%</div></div>
+    <div class="pm"><div class="pl">Value</div><div class="pv">${fmt(r.value)}</div></div>
+    <div class="pm"><div class="pl">Trades</div><div class="pv">${r.trades||0}</div></div>
+    <div class="pm"><div class="pl">DD</div><div class="pv">${(r.dd_pct||0).toFixed(1)}%</div></div></div>
+   ${r._rk===1?`<div class="pnote">Current leader · deposit-invariant PnL</div>`:''}
+  </div>`).join('')}</div>`;}
 if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
 else if((D.method||{}).sim_cost_bps===0){$('banner').className='banner';$('banner').innerHTML='Execution price, DEX fees and slippage are already reflected on-chain. The additional organizer simulated-cost rate is shown as 0 until an official rate is published.';}
 const cols=[['#','rank',1],['Agent','agent',0],['Value','value',1],['PnL','ret_pct',1,'pnlcol'],['Trades','trades',1,'trcol'],['Drawdown','dd_pct',1,'ddcol']];
@@ -223,7 +257,7 @@ function render(){let rs=R.slice();
  $('rows').innerHTML=html||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
 $('q').oninput=render;$('minv').oninput=render;
 $('flt').onchange=render;
-ranks();stats();render();
+ranks();stats();podium();render();
 </script></body></html>"""
 
 html = TEMPLATE.replace("/*DATA*/", json.dumps(D))
