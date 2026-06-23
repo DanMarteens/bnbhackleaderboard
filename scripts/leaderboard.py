@@ -745,8 +745,11 @@ def main():
     json.dump(hist, open(HIST_F, "w"))
 
     def raw_series(a):
-        return [(h["ts"], h["v"].get(a, 0.0), h.get("f", {}).get(a, 0.0))
-                for h in calc_hist]
+        # A participant discovered by a later full-registry scan is absent from older
+        # snapshots. Absence means "unknown", not a $0 portfolio (which created a fake
+        # -100% day and drawdown).
+        return [(h["ts"], h["v"][a], h.get("f", {}).get(a, 0.0))
+                for h in calc_hist if a in h.get("v", {})]
 
     def drawdown(a):
         # Max peak-to-trough decline of portfolio VALUE, with the peak REBASED whenever external
@@ -754,7 +757,8 @@ def main():
         # Computing on value (not the deposit-adjusted dollar series, which hovers near zero and
         # blew the % into the thousands) keeps it bounded; rebasing on flow changes stops deposits
         # from registering as drawdown. Real price declines, which carry no flow change, still count.
-        raw = [(h["v"].get(a, 0.0), h.get("f", {}).get(a, 0.0)) for h in calc_hist]
+        raw = [(h["v"][a], h.get("f", {}).get(a, 0.0))
+               for h in calc_hist if a in h.get("v", {})]
         # De-spike single-snapshot price glitches (a held token momentarily unpriced) with median-of-3.
         vs = [x[0] for x in raw]
         clean = list(vs)
