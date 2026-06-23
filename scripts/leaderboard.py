@@ -41,6 +41,7 @@ BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # (legacy) nat
 FLOWS_CB_F = os.path.join(ROOT, "dashboard", "flows_costbasis.json")  # cost-basis flows {agent:[dep,wd]}
 FLOWS_TIMELINE_F = os.path.join(ROOT, "dashboard", "flows_timeline.json")
 LASTPX_F = os.path.join(ROOT, "dashboard", "last_prices.json")    # carry-forward price store (feed-gap guard)
+DAY_BLOCKS_F = os.path.join(ROOT, "dashboard", "day_start_blocks.json")
 MAXHIST = 200          # hourly starts + current point; comfortably covers the event
 MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
 DQ = 0.30              # disqualification drawdown line
@@ -187,7 +188,7 @@ def load_tokens():
     return tokens, prices, decimals
 
 
-CACHE_TTL = int(os.environ.get("LB_CACHE_TTL", "300"))   # 5 min -> a 60s loop reuses the
+CACHE_TTL = int(os.environ.get("LB_CACHE_TTL", "1800"))  # 30 min -> a 60s loop reuses the
 # expensive results (CMC quotes, getLogs flow/trade scans) instead of refetching every tick.
 # Re-valuation (Multicall3, keyless) still happens every run, so values stay fresh.
 
@@ -659,6 +660,27 @@ def block_at_ts(target_ts):
     return lo
 
 
+def cached_block_at_ts(target_ts):
+    """First BSC block at/after target_ts, persisted because competition day starts are immutable.
+
+    Without this cache, the minute loop binary-searches historical blocks through ARCHIVE_RPC on
+    every run even when the activity scan itself is cached.
+    """
+    key = str(int(target_ts))
+    try:
+        cache = json.load(open(DAY_BLOCKS_F))
+    except Exception:
+        cache = {}
+    if key in cache:
+        return int(cache[key])
+    b = block_at_ts(int(target_ts))
+    cache[key] = int(b)
+    tmp = DAY_BLOCKS_F + ".tmp"
+    json.dump(cache, open(tmp, "w"))
+    os.replace(tmp, DAY_BLOCKS_F)
+    return b
+
+
 def main():
     do_baseline = "--baseline" in sys.argv
     # Re-enumerate (archive RPC) only on request or first run; otherwise load the saved
@@ -731,7 +753,7 @@ def main():
         day_starts = []
         for i in range(active_days):
             try:
-                day_starts.append(block_at_ts((gl_ts or GO_LIVE_TS) + i * 86400))
+                day_starts.append(cached_block_at_ts((gl_ts or GO_LIVE_TS) + i * 86400))
             except Exception:
                 day_starts.append(gl if i == 0 else day_starts[-1])
         (flows, swaps, traded_today, daily_swaps,

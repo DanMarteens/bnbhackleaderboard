@@ -8,31 +8,16 @@ set +a
 
 PY=/opt/cmc-twak-agent/.venv/bin/python
 LOG=logs/lb.log
-ENUM_STAMP=dashboard/.last_registry_scan
 MIN_AGENTS=123
 
 # Never let two minute-loop iterations mutate history or deploy concurrently.
 exec 9>/run/leaderboard.lock
 flock -n 9 || exit 0
 
-# Registration remains open during the competition. Refresh the full on-chain
-# registry every five minutes, before flow accounting, so new agents appear
-# without making every minute refresh pay for an archive scan.
-now=$(date +%s)
-last=0
-force_costbasis=0
-[ -f "$ENUM_STAMP" ] && last=$(cat "$ENUM_STAMP" 2>/dev/null || echo 0)
-if [ -n "${ARCHIVE_RPC:-}" ] && [ $((now - last)) -ge 300 ]; then
-  "$PY" scripts/leaderboard.py --enumerate >>"$LOG" 2>&1
-  date +%s >"$ENUM_STAMP"
-  force_costbasis=1
-fi
-
-if [ "$force_costbasis" -eq 1 ]; then
-  "$PY" scripts/flows_costbasis.py --force >>"$LOG" 2>&1
-else
-  "$PY" scripts/flows_costbasis.py >>"$LOG" 2>&1
-fi
+# Registry scan is intentionally disabled: the competition registration set is frozen
+# enough for live operations, and avoiding archive-wide scans preserves NodeReal quota.
+# Add exceptional late/manual agents to dashboard/extra_participants.json instead.
+"$PY" scripts/flows_costbasis.py >>"$LOG" 2>&1
 "$PY" scripts/leaderboard.py >>"$LOG" 2>&1
 "$PY" scripts/audit_leaderboard.py >>"$LOG" 2>&1
 
