@@ -24,9 +24,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install "eth-abi" "eth-hash[pycryptodome]" pyyaml
-      - name: Compute leaderboard (free public RPC + Multicall3 + coingecko)
+      - name: Compute rule-accurate flows and leaderboard
         env:
           ARCHIVE_RPC: ${{ secrets.ARCHIVE_RPC }}
+          CMC_MCP_API_KEY: ${{ secrets.CMC_MCP_API_KEY }}
+          SIM_COST_BPS: ${{ vars.SIM_COST_BPS || '0' }}
         run: |
           GO_LIVE=$(date -u -d "2026-06-22 00:00:00" +%s)
           NOW=$(date -u +%s)
@@ -46,6 +48,9 @@ jobs:
             FLAGS="$FLAGS --baseline"
           fi
           echo "flags:$FLAGS"
+          # Cost-basis flows must be refreshed before PnL. Otherwise a deposit can be
+          # mistaken for profit in this manual fallback deployment.
+          python scripts/flows_costbasis.py --force
           python scripts/leaderboard.py $FLAGS
       - name: Persist history + baseline
         run: |

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Reconstruct the FROZEN go-live baseline from on-chain state at the go-live block.
+"""Reconstruct go-live contributed capital from on-chain state at the go-live block.
 
 The competition's start balance must be pinned to the trading-window open
 (Jun 22 00:00 UTC), not to whenever a snapshot happened to run. This finds the
 first BSC block at/after that instant and values every agent's BEP-20 portfolio
 *at that block* (archive RPC), so the baseline is deterministic and reproducible.
 
-Writes dashboard/lb_baseline.json + dashboard/golive.json. Run once; commit the
-result so the scheduled job never re-snapshots it. Needs ARCHIVE_RPC.
+Later funding remains valid but is added separately at transaction-time cost basis;
+it never rewrites this snapshot or creates PnL. Writes dashboard/lb_baseline.json +
+dashboard/golive.json. Run once; commit the result. Needs ARCHIVE_RPC.
 """
 import sys, os, json, time, datetime as dt
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))

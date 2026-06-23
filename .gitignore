@@ -1,2 +1,5 @@
 dashboard/leaderboard.json
 dashboard/lb_decimals.json
+dashboard/_c_*.json
+scripts/__pycache__/
+tests/__pycache__/

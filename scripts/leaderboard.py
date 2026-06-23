@@ -40,9 +40,15 @@ FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: 
 BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # (legacy) native-BNB deposits
 FLOWS_CB_F = os.path.join(ROOT, "dashboard", "flows_costbasis.json")  # cost-basis flows {agent:[dep,wd]}
 LASTPX_F = os.path.join(ROOT, "dashboard", "last_prices.json")    # carry-forward price store (feed-gap guard)
-MAXHIST = 400          # ~8 days at 30-min cadence
+MAXHIST = 200          # hourly starts + current point; comfortably covers the event
 MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
 DQ = 0.30              # disqualification drawdown line
+GO_LIVE_TS = 1782086400        # 2026-06-22 00:00:00 UTC
+HACK_DAYS = 7
+DEX_MIN_LIQUIDITY = float(os.environ.get("DEX_MIN_LIQUIDITY", "25000"))
+DEX_DEVIATION = float(os.environ.get("DEX_DEVIATION", "0.20"))
+SIM_COST_BPS = float(os.environ.get("SIM_COST_BPS", "0"))
+PRICE_OVERRIDES = {}
 
 
 def _post(payload, url=None):
@@ -110,7 +116,22 @@ def enumerate_participants(start=104800000, step=40000):
 
 
 STABLES = {"USDT", "USDC", "DAI", "TUSD", "FDUSD", "USD1", "USDe", "FRAX", "FRXUSD",
-           "USDD", "USDF", "lisUSD", "DUSD", "XUSD", "BILL", "USDf"}
+           "USDD", "USDF", "lisUSD", "DUSD", "XUSD", "USDf"}
+
+
+def apply_dex_guard(prices, dex):
+    """Mutate prices with liquid, materially divergent BSC marks; return audit metadata."""
+    overrides = {}
+    for s, q in dex.items():
+        dp, liq = q.get("price", 0), q.get("liquidity", 0)
+        cp = float(prices.get(s, 0) or 0)
+        if s in STABLES or dp <= 0 or liq < DEX_MIN_LIQUIDITY:
+            continue
+        deviation = abs(dp / cp - 1) if cp > 0 else 1.0
+        if cp <= 0 or deviation > DEX_DEVIATION:
+            overrides[s] = {"cmc": cp, "dex": dp, "liquidity": liq}
+            prices[s] = dp
+    return overrides
 
 
 def load_tokens():
@@ -148,6 +169,16 @@ def load_tokens():
         prices.update({k: v for k, v in cmc_prices(list(tokens)).items() if v})
     except Exception:
         pass
+    # CMC can diverge sharply from the BSC market for bridged/thin tokens. That creates
+    # instant paper profit after a swap (SIREN and BILL did this in the live event). Use
+    # the deepest BSC DEX pair as a sanity oracle and override CMC only when the gap is
+    # material and the pair has enough liquidity to be meaningful.
+    try:
+        dex = dex_prices(tokens)
+        PRICE_OVERRIDES.clear()
+        PRICE_OVERRIDES.update(apply_dex_guard(prices, dex))
+    except Exception as e:
+        print("dex price sanity check failed:", e)
     for s in tokens:
         if s in STABLES:
             prices[s] = 1.0
@@ -179,6 +210,44 @@ def _cache_put(name, v):
 
 CMC_IDS_F = os.path.join(ROOT, "config", "cmc_ids.json")
 CMC_MCP_URL = os.environ.get("CMC_MCP_URL", "https://mcp.coinmarketcap.com/mcp")
+
+
+def dex_prices(tokens):
+    """symbol -> {price, liquidity} from the deepest BSC DexScreener pair.
+
+    This is not used as a second independent ranking feed. It is a manipulation/error
+    guard for CMC marks: only a >DEX_DEVIATION discrepancy backed by >=DEX_MIN_LIQUIDITY
+    changes the mark. Cached so a one-minute refresh does not hammer the public endpoint.
+    """
+    cached = _cache_get("dex", 300)
+    if cached is not None:
+        return cached
+    addr_sym = {a.lower(): s for s, a in tokens.items()}
+    addrs = list(addr_sym)
+    best = {}
+    for i in range(0, len(addrs), 30):
+        url = "https://api.dexscreener.com/tokens/v1/bsc/" + ",".join(addrs[i:i + 30])
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            rows = json.load(urllib.request.urlopen(req, timeout=30))
+        except Exception:
+            rows = []
+        for row in rows if isinstance(rows, list) else []:
+            base = (row.get("baseToken") or {}).get("address", "").lower()
+            sym = addr_sym.get(base)
+            if not sym:
+                continue
+            try:
+                px = float(row.get("priceUsd") or 0)
+                liq = float((row.get("liquidity") or {}).get("usd") or 0)
+            except Exception:
+                continue
+            if px > 0 and liq > best.get(sym, {}).get("liquidity", -1):
+                best[sym] = {"price": px, "liquidity": liq}
+        time.sleep(0.05)
+    if best:
+        _cache_put("dex", best)
+    return best
 
 
 def _mcp_call(method, params, session_id=None):
@@ -350,9 +419,8 @@ def multicall(pairs, block="latest"):
 def value_agents(agents, tokens, prices, decimals, block="latest"):
     """Returns (totals{agent:usd}, holdings{agent:[[sym,usd], ...] top by value}).
 
-    Counts eligible BEP-20 balances AND native BNB. Native BNB must be valued or an agent
-    that holds BNB at go-live and swaps it to tokens shows a fake gain (token->BNB a fake
-    loss); counting it both at baseline and now makes BNB<->token rebalances neutral.
+    Counts eligible BEP-20 balances only. Native BNB is outside the eligible sleeve;
+    BNB<->token conversions are handled as capital entering/leaving, never as trades.
     `block` lets the same logic value a historical block for the go-live baseline."""
     syms = list(tokens)
     pairs = [(tokens[s], SEL_BAL + "0" * 24 + ag[2:]) for ag in agents for s in syms]
@@ -372,38 +440,111 @@ def value_agents(agents, tokens, prices, decimals, block="latest"):
     return vals, holds
 
 
-def scan_activity(agents, golive_block, day_start_block, tokens, prices, decimals):
-    """One getLogs pass over agents' BEP-20 Transfers since go-live, classified by the
-    COUNTERPARTY (the non-agent side), resolved via eth_getCode:
+def classify_transactions(agents, by_agent_tx, addr_sym, prices, decimals, day_start_blocks):
+    """Pure scoring classifier used by the live scan and regression tests."""
+    flows = {a: 0.0 for a in agents}
+    trades = {a: 0 for a in agents}
+    daily = {a: [0] * len(day_start_blocks) for a in agents}
+    first_funding_day = {a: None for a in agents}
+    turnover = {a: 0.0 for a in agents}
 
-      * counterparty is a CONTRACT (DEX router / pair / aggregator) -> a TRADE leg.
-        This catches token<->token AND BNB<->token swaps (where only one token leg
-        shows on-chain, the other being native BNB) -> robust 'did they trade'.
-      * counterparty is an EOA -> a capital flow: inbound = deposit, outbound = withdrawal.
+    def leg_usd(l):
+        sym = addr_sym.get(l.get("address", "").lower())
+        try:
+            return (int(l["data"], 16) / (10 ** decimals.get(sym, 18))
+                    * float(prices.get(sym, 0) or 0))
+        except Exception:
+            return 0.0
 
-    Returns (flows, trades):
-      flows[a]  = net external deposit USD since go-live (EOA legs, in - out) -> the
-                  deposit-invariant baseline adjustment.
-      trades[a] = count of distinct txs with a contract-counterparty leg on/after
-                  day_start_block -> 'traded today' (>=1 swap/UTC-day to stay ranked).
+    def day_index(block):
+        idx = None
+        for i, b in enumerate(day_start_blocks):
+            if block >= b:
+                idx = i
+            else:
+                break
+        return idx
 
-    Caveat: a deposit routed through a contract (a bridge) reads as a trade, not a flow.
-    getLogs + eth_getCode based; cached CACHE_TTL s; fail-safe -> cached/zeros."""
+    for agent, txs in by_agent_tx.items():
+        for rec in txs.values():
+            vin = sum(leg_usd(l) for l in rec["in"])
+            vout = sum(leg_usd(l) for l in rec["out"])
+            di = day_index(rec["block"])
+            if rec["in"] and rec["out"]:
+                trades[agent] += 1
+                turnover[agent] += vout
+                if di is not None and di < len(daily[agent]):
+                    daily[agent][di] += 1
+            elif rec["in"]:
+                flows[agent] += vin
+                if di is not None and first_funding_day[agent] is None:
+                    first_funding_day[agent] = di
+            elif rec["out"]:
+                flows[agent] -= vout
+    flows = {a: round(flows.get(a, 0.0), 2) for a in agents}
+    turnover = {a: round(turnover.get(a, 0.0), 2) for a in agents}
+    return flows, trades, daily, first_funding_day, turnover
+
+
+def daily_qualification(baseline, counts):
+    """Return (qualified, missing days), allowing a zero-start wallet to enter late.
+
+    Capital present at go-live owes every competition day. A zero-start wallet begins
+    its daily obligation on its first strict eligible swap day; merely funding earlier
+    must not create a retroactive missed-day penalty.
+    """
+    start_day = 0 if baseline > MINCAP else next((i for i, n in enumerate(counts) if n > 0), None)
+    required = list(range(start_day, len(counts))) if start_day is not None else []
+    missing = [i + 1 for i in required if counts[i] < 1]
+    return bool(required) and not missing, missing
+
+
+def capital_return(value, baseline, deposits, withdrawals, turnover=0.0, cost_bps=0.0):
+    """Deposit-neutral total return and effective capital; None when no capital exists."""
+    capital = float(baseline or 0) + float(deposits or 0)
+    if capital <= MINCAP:
+        return None, capital, 0.0
+    sim_cost = float(turnover or 0) * float(cost_bps or 0) / 10000.0
+    ret = ((float(value or 0) + float(withdrawals or 0) - sim_cost) / capital - 1) * 100
+    return round(ret, 2), capital, sim_cost
+
+
+def scan_activity(agents, golive_block, day_start_blocks, tokens, prices, decimals):
+    """Classify every eligible-token transaction touching an agent.
+
+    Competition trade (strict): the same transaction has >=1 eligible token entering
+    AND >=1 eligible token leaving the agent. BNB legs, deposits, withdrawals, airdrops,
+    approvals and one-sided contract transfers never count as trades.
+
+    One-sided eligible activity is an external capital flow. This classification is based
+    on the complete per-transaction shape, not whether a counterparty has bytecode; bridges,
+    smart wallets and BNB conversions therefore cannot inflate the trade count.
+
+    Returns flows, cumulative trades, current-day trades, per-day trades,
+    first funding day, and eligible-swap turnover in USD.
+    """
     flows = {a: 0.0 for a in agents}
     trades = {a: 0 for a in agents}      # cumulative swaps since go-live (displayed)
     today = {a: 0 for a in agents}       # swaps in the current UTC day (>=1 -> scoring gate)
+    daily = {a: [0] * len(day_start_blocks) for a in agents}
+    first_funding_day = {a: None for a in agents}
+    turnover = {a: 0.0 for a in agents}
     if not RPC or not agents:
-        return flows, trades, today
-    cached = _cache_get("activity")
+        return flows, trades, today, daily, first_funding_day, turnover
+    cached = _cache_get("activity_v2")
     if cached is not None:
         f, t, d = cached.get("flows", {}), cached.get("trades", {}), cached.get("today", {})
+        dy, ff, tv = cached.get("daily", {}), cached.get("first_funding_day", {}), cached.get("turnover", {})
         return ({a: float(f.get(a, 0.0)) for a in agents},
                 {a: int(t.get(a, 0)) for a in agents},
-                {a: int(d.get(a, 0)) for a in agents})
+                {a: int(d.get(a, 0)) for a in agents},
+                {a: list(dy.get(a, [0] * len(day_start_blocks))) for a in agents},
+                {a: ff.get(a) for a in agents},
+                {a: float(tv.get(a, 0.0)) for a in agents})
     try:
         latest = int(rpc("eth_blockNumber", []), 16)
         if golive_block >= latest:
-            return flows, trades, today
+            return flows, trades, today, daily, first_funding_day, turnover
         addr_sym = {a.lower(): s for s, a in tokens.items()}
         token_addrs = list({a for a in tokens.values()})
         agent_set = set(a.lower() for a in agents)
@@ -430,7 +571,7 @@ def scan_activity(agents, golive_block, day_start_block, tokens, prices, decimal
             b = e + 1
             time.sleep(0.1)
 
-        seen, rows, cps = set(), [], set()
+        seen, rows = set(), []
         for l in logs:
             ident = (l.get("transactionHash"), l.get("logIndex"))
             if ident in seen or len(l.get("topics", [])) < 3:
@@ -442,49 +583,35 @@ def scan_activity(agents, golive_block, day_start_block, tokens, prices, decimal
             except Exception:
                 blk = 0
             rows.append((frm, to, l, blk))
-            cps.add(to if frm in agent_set else frm)
-        cps = list(cps)
-        is_contract = {}
-        codes = rpc_batch([("eth_getCode", [c, "latest"]) for c in cps]) if cps else []
-        for c, r in zip(cps, codes):
-            is_contract[c] = r not in (None, "0x", "0x0", "")
-        traded_tx = {}
-        traded_all = {}
+
+        # agent -> tx -> {in:[logs], out:[logs], block}
+        by_agent_tx = {}
         for frm, to, l, blk in rows:
-            if to in agent_set and frm not in agent_set:
-                agent, cp, inbound = to, frm, True
-            elif frm in agent_set and to not in agent_set:
-                agent, cp, inbound = frm, to, False
-            else:
-                continue                            # agent<->agent: skip
-            if is_contract.get(cp):                 # DEX leg -> a trade
-                traded_all.setdefault(agent, set()).add(l.get("transactionHash"))   # cumulative
-                if blk >= day_start_block:
-                    traded_tx.setdefault(agent, set()).add(l.get("transactionHash"))  # today (gate)
-                continue
-            sym = addr_sym.get(l.get("address", "").lower())          # EOA leg -> capital flow
-            price = float(prices.get(sym, 0) or 0) if sym else 0
-            if price <= 0:
-                continue
-            try:
-                usd = int(l["data"], 16) / (10 ** decimals.get(sym, 18)) * price
-            except Exception:
-                continue
-            if usd > 0:
-                flows[agent] = flows.get(agent, 0.0) + (usd if inbound else -usd)
-        flows = {a: round(flows.get(a, 0.0), 2) for a in agents}
-        trades = {a: len(traded_all.get(a, ())) for a in agents}   # cumulative since go-live
-        today = {a: len(traded_tx.get(a, ())) for a in agents}     # this UTC day (scoring gate)
+            txh = l.get("transactionHash")
+            if to in agent_set:
+                rec = by_agent_tx.setdefault(to, {}).setdefault(txh, {"in": [], "out": [], "block": blk})
+                rec["in"].append(l)
+            if frm in agent_set:
+                rec = by_agent_tx.setdefault(frm, {}).setdefault(txh, {"in": [], "out": [], "block": blk})
+                rec["out"].append(l)
+
+        flows, trades, daily, first_funding_day, turnover = classify_transactions(
+            agents, by_agent_tx, addr_sym, prices, decimals, day_start_blocks)
+        today = {a: (daily[a][-1] if daily[a] else 0) for a in agents}
         json.dump(flows, open(FLOWS_F, "w"))
-        _cache_put("activity", {"flows": flows, "trades": trades, "today": today})
-        return flows, trades, today
+        _cache_put("activity_v2", {"flows": flows, "trades": trades, "today": today,
+                                   "daily": daily, "first_funding_day": first_funding_day,
+                                   "turnover": turnover})
+        return flows, trades, today, daily, first_funding_day, turnover
     except Exception as ex:
         print("activity scan failed (using cache/zero):", ex)
         try:
             cached = json.load(open(FLOWS_F))
-            return ({a: float(cached.get(a, 0.0)) for a in agents}, {a: 0 for a in agents}, {a: 0 for a in agents})
+            return ({a: float(cached.get(a, 0.0)) for a in agents}, {a: 0 for a in agents},
+                    {a: 0 for a in agents}, daily, first_funding_day, turnover)
         except Exception:
-            return ({a: 0.0 for a in agents}, {a: 0 for a in agents}, {a: 0 for a in agents})
+            return ({a: 0.0 for a in agents}, {a: 0 for a in agents},
+                    {a: 0 for a in agents}, daily, first_funding_day, turnover)
 
 
 def block_at_ts(target_ts):
@@ -531,7 +658,6 @@ def main():
 
     now = int(time.time())
     baseline = {}
-    eligible = {}               # per-agent: held >= MINCAP eligible balance at the FROZEN go-live block
 
     if do_baseline:
         json.dump(vals, open(BASE_F, "w")); baseline = vals
@@ -545,51 +671,65 @@ def main():
             golive_base = json.load(open(BASE_F))     # IMMUTABLE go-live snapshot (never rewritten)
         except Exception:
             golive_base = {}
-        # Start-eligibility is FROZEN at the go-live block: a wallet must have held >= MINCAP of
-        # eligible balance when the trading window opened (official rule). Wallets that started
-        # empty stay VISIBLE but never get a baseline, a return, or a rank — funding the wallet
-        # after go-live cannot buy eligibility. (Replaces the old late-funder "lazy baseline"
-        # credit, which let zero-at-start wallets appear in — and top — the prize ranks.)
         for a in agents:
             gb = golive_base.get(a, 0) or 0
-            eligible[a] = gb >= MINCAP
-            if eligible[a]:
-                baseline[a] = gb
+            baseline[a] = gb
 
     # ---- one on-chain pass: net deposits (capital base) + who traded today ----
     flows = {a: 0.0 for a in agents}
     swaps = {a: 0 for a in agents}
     traded_today = {a: 0 for a in agents}
+    daily_swaps = {a: [] for a in agents}
+    first_funding_day = {a: None for a in agents}
+    turnover = {a: 0.0 for a in agents}
     try:
         gj = json.load(open(GOLIVE_F)); gl = gj.get("block"); gl_ts = gj.get("ts")
     except Exception:
         gl = gl_ts = None
     if gl and not do_baseline:     # no post-go-live flow can exist on the baseline run
-        import datetime as _dt0
-        day0 = int(_dt0.datetime.now(_dt0.timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0).timestamp())
-        if gl_ts:
-            day0 = max(day0, gl_ts)        # Day 1: day-start == go-live
-        try:
-            dsb = block_at_ts(day0)
-        except Exception:
-            dsb = gl
-        flows, swaps, traded_today = scan_activity(agents, gl, dsb, tokens, prices, decimals)
+        active_days = max(1, min(HACK_DAYS, int((now - (gl_ts or GO_LIVE_TS)) // 86400) + 1))
+        day_starts = []
+        for i in range(active_days):
+            try:
+                day_starts.append(block_at_ts((gl_ts or GO_LIVE_TS) + i * 86400))
+            except Exception:
+                day_starts.append(gl if i == 0 else day_starts[-1])
+        (flows, swaps, traded_today, daily_swaps,
+         first_funding_day, turnover) = scan_activity(
+            agents, gl, day_starts, tokens, prices, decimals)
+
+    # Cost-basis flows are authoritative for PnL and history rebasing. Unlike the light
+    # activity scan, they are valued at transaction time.
+    try:
+        costflow = json.load(open(FLOWS_CB_F))
+    except Exception:
+        costflow = {}
 
     # ---- history time-series (append + cap) -> enables sparklines/24h/drawdown ----
     try:
-        hist = json.load(open(HIST_F))
+        old_hist = json.load(open(HIST_F))
     except Exception:
-        hist = []
-    hist.append({"ts": now, "v": {a: vals.get(a, 0.0) for a in agents},
-                 "f": {a: flows.get(a, 0.0) for a in agents}})
+        old_hist = []
+    # Keep the first observation in each UTC hour: that is the rules-relevant hour-start
+    # mark. A current point is used for live PnL but is not persisted repeatedly.
+    hourly = {}
+    for h in old_hist:
+        hourly.setdefault(int(h.get("ts", 0)) // 3600, h)
+    hist = [hourly[k] for k in sorted(hourly)]
+    snap = {"ts": now, "v": {a: vals.get(a, 0.0) for a in agents},
+            "f": {a: round((costflow.get(a, [0.0, 0.0])[0]
+                             - costflow.get(a, [0.0, 0.0])[1]), 2) for a in agents}}
+    if not hist or hist[-1].get("ts", 0) // 3600 != now // 3600:
+        hist.append(snap)
+        calc_hist = hist
+    else:
+        calc_hist = hist + [snap]
     hist = hist[-MAXHIST:]
     json.dump(hist, open(HIST_F, "w"))
 
-    def series(a):                 # deposit-adjusted value series (raw value minus cumulative
-        # net deposits at each snapshot) -> every window is deposit-neutral. Old snapshots
-        # without an "f" field predate the event, where flow is 0 anyway.
-        return [(h["ts"], h["v"].get(a, 0.0) - h.get("f", {}).get(a, 0.0)) for h in hist]
+    def raw_series(a):
+        return [(h["ts"], h["v"].get(a, 0.0), h.get("f", {}).get(a, 0.0))
+                for h in calc_hist]
 
     def drawdown(a):
         # Max peak-to-trough decline of portfolio VALUE, with the peak REBASED whenever external
@@ -597,7 +737,7 @@ def main():
         # Computing on value (not the deposit-adjusted dollar series, which hovers near zero and
         # blew the % into the thousands) keeps it bounded; rebasing on flow changes stops deposits
         # from registering as drawdown. Real price declines, which carry no flow change, still count.
-        raw = [(h["v"].get(a, 0.0), h.get("f", {}).get(a, 0.0)) for h in hist]
+        raw = [(h["v"].get(a, 0.0), h.get("f", {}).get(a, 0.0)) for h in calc_hist]
         # De-spike single-snapshot price glitches (a held token momentarily unpriced) with median-of-3.
         vs = [x[0] for x in raw]
         clean = list(vs)
@@ -617,42 +757,43 @@ def main():
         return round(min(dd, 1.0) * 100, 2)            # clamp as a safety net
 
     import datetime as _dt
-    HACK_DAYS = 7                  # Jun 22..28 UTC -> Day 1..Day 7
     def _day_bounds(n):            # n=1..7 -> (start_ts, end_ts) UTC; Day 1 = Jun 22
         st = _dt.datetime(2026, 6, 21 + n, tzinfo=_dt.timezone.utc).timestamp()
         return int(st), int(st + 86400)
 
-    def _at_or_before(s, ts):      # last snapshot value with t <= ts (s ascending)
+    def _at_or_before(s, ts):      # last snapshot with t <= ts (s ascending)
         val = None
-        for t, v in s:
+        for row in s:
+            t = row[0]
             if t <= ts:
-                val = v
+                val = row
             else:
                 break
         return val
 
-    def dayret_n(s, n, base):      # close-to-close return for hackathon Day n
+    def dayret_n(s, n, base):      # flow-neutral close-to-close return for hackathon Day n
         st, en = _day_bounds(n)
         if now < st:               # day hasn't started yet
             return None
-        prev = base if n == 1 else _at_or_before(s, st)   # Day 1 opens at go-live baseline
-        if not prev or prev < MINCAP:
-            prev = next((v for t, v in s if t >= st), None)
-        if not prev or prev < MINCAP:
+        start_row = _at_or_before(s, st)
+        if n == 1 and base > MINCAP:
+            start_v, start_f = base, 0.0
+        elif start_row and start_row[1] > MINCAP:
+            start_v, start_f = start_row[1], start_row[2]
+        else:
+            funded = next((row for row in s if st <= row[0] < en and row[1] > MINCAP), None)
+            if not funded:
+                return None
+            start_v, start_f = funded[1], funded[2]
+        end_row = s[-1] if now < en else _at_or_before(s, en)
+        if not end_row or start_v < MINCAP:
             return None
-        cur = s[-1][1] if now < en else _at_or_before(s, en)   # in-progress -> current
-        if not cur:
-            return None
-        return round((cur / prev - 1) * 100, 2)
-
-    try:
-        costflow = json.load(open(FLOWS_CB_F))         # cost-basis flows: {agent: [deposits, withdrawals]}
-    except Exception:
-        costflow = {}
+        end_adjusted = end_row[1] - (end_row[2] - start_f)
+        return round((end_adjusted / start_v - 1) * 100, 2)
 
     rows = []
     for a in agents:
-        s = series(a); v = vals.get(a, 0.0)
+        s = raw_series(a); v = vals.get(a, 0.0)
         # Deposit-INVARIANT return on the ELIGIBLE sleeve, from cost-basis flow accounting
         # (flows_costbasis.py groups transfers per tx): `dep` = external capital that entered the
         # sleeve (token deposits + BNB->token buys), `wd` = capital that left (token withdrawals +
@@ -660,24 +801,40 @@ def main():
         # kept; only external flows are netted. Deposits go in the DENOMINATOR, withdrawals add back
         # to value -> depositing/withdrawing can't move the rank, only trading does.
         dep, wd = costflow.get(a, (0.0, 0.0))
-        is_elig = eligible.get(a, True)                    # frozen at go-live; pre-launch -> all shown
-        b_eff = (baseline.get(a) or 0.0) + dep             # go-live stake + later deposits
-        allret = (round(((v + wd) / b_eff - 1) * 100, 2)
-                  if is_elig and b_eff > MINCAP else None)
+        allret, b_eff, sim_cost = capital_return(
+            v, baseline.get(a), dep, wd, turnover.get(a, 0.0), SIM_COST_BPS)
+        is_elig = b_eff > MINCAP                           # late funding is valid capital, not profit
+        # A wallet funded at go-live owes every active competition day. A wallet funded later
+        # starts owing the daily swap requirement on its funding day.
+        counts = list(daily_swaps.get(a, []))
+        daily_ok, missing_days = daily_qualification(baseline.get(a) or 0.0, counts)
         win = {"all": allret}                          # All + Day 1..Day 7 (UTC days)
         for n in range(1, HACK_DAYS + 1):
-            win["d%d" % n] = dayret_n(s, n, b_eff) if is_elig else None
+            win["d%d" % n] = dayret_n(s, n, baseline.get(a) or 0.0) if is_elig else None
         rows.append({"agent": a, "value": v, "base": round(b_eff, 2), "dep": round(dep - wd, 2),
-                     "trades": swaps.get(a, 0), "traded": traded_today.get(a, 0) >= 1,
+                     "trades": swaps.get(a, 0), "traded": daily_ok,
+                     "traded_today": traded_today.get(a, 0) >= 1,
+                     "daily_trades": counts, "missing_days": missing_days,
+                     "sim_cost": round(sim_cost, 4),
                      "ret_pct": allret, "dd_pct": drawdown(a), "eligible": is_elig,
-                     "holds": holds.get(a, []), "win": win})
-    if baseline:   # live: eligible first, then active traders (>=1 swap today), then by return
-        rows.sort(key=lambda r: (not r.get("eligible", True), not r["traded"],
+                     "holds": holds.get(a, []), "win": win,
+                     "price_flags": [s for s, _ in holds.get(a, []) if s in PRICE_OVERRIDES]})
+    def scoring(r):
+        return (r.get("eligible", False) and r.get("traded", False)
+                and r.get("value", 0) > 1.0 and r.get("dd_pct", 0) < DQ * 100)
+
+    if baseline:
+        rows.sort(key=lambda r: (not scoring(r),
                                  -(r["ret_pct"] if r["ret_pct"] is not None else -1e9), r["agent"]))
     else:          # pre-go-live: no returns yet -> just surface the funded agents
         rows.sort(key=lambda r: r["value"], reverse=True)
-    for i, r in enumerate(rows):
-        r["rank"] = i + 1
+    rank = 0
+    for r in rows:
+        if scoring(r):
+            rank += 1
+            r["rank"] = rank
+        else:
+            r["rank"] = None
 
     has_base = bool(baseline)
     elig_rows = [r for r in rows if r.get("eligible")]       # all stats below are over eligible-at-start only
@@ -688,13 +845,18 @@ def main():
         "funded": sum(1 for r in rows if r["value"] > 0),
         "trading": (sum(1 for r in elig_rows if r.get("traded")) if has_base else None),
         "deployed": round(sum(r["value"] for r in rows), 2),
-        "in_profit": (sum(1 for r in elig_rows if (r["ret_pct"] or 0) > 0) if has_base else None),
+        "in_profit": (sum(1 for r in rows if scoring(r) and (r["ret_pct"] or 0) > 0)
+                      if has_base else None),
         "avg_ret": (round(sum(rets) / len(rets), 2) if rets else None),
         "survivors": (sum(1 for r in elig_rows if r["dd_pct"] < DQ * 100) if has_base else None),
         "dq_pct": DQ * 100,
     }
     out = {"generated_ts": now, "n": len(agents), "has_baseline": has_base,
-           "stats": stats, "rows": rows}
+           "stats": stats, "rows": rows,
+           "method": {"trade": "eligible-in-and-out-same-tx",
+                      "daily_gate": "go-live-funded-or-first-strict-trade-day",
+                      "price": "CMC with liquid-BSC-DEX deviation guard",
+                      "sim_cost_bps": SIM_COST_BPS, "price_overrides": PRICE_OVERRIDES}}
     json.dump(out, open(OUT_F, "w"))
 
     print(f"participants {len(agents)} | baseline {has_base} | funded {stats['funded']} | deployed ${stats['deployed']}")
