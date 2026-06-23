@@ -821,7 +821,16 @@ def main():
         # token->BNB cash-outs). Eligible<->eligible swaps are NEUTRAL, so genuine trading gains are
         # kept; only external flows are netted. Deposits go in the DENOMINATOR, withdrawals add back
         # to value -> depositing/withdrawing can't move the rank, only trading does.
-        dep, wd = costflow.get(a, (0.0, 0.0))
+        # A missing cost-basis row must never mean "zero deposits". It can also mean
+        # that the cost-basis refresh was skipped/stale or that this agent's archive
+        # query failed. Fall back to the independently computed net-flow scan; this is
+        # conservative for ranking and prevents deposits from appearing as profit.
+        costbasis_missing = a not in costflow
+        if costbasis_missing:
+            net_flow = flows.get(a, 0.0)
+            dep, wd = max(net_flow, 0.0), max(-net_flow, 0.0)
+        else:
+            dep, wd = costflow[a]
         allret, b_eff, sim_cost = capital_return(
             v, baseline.get(a), dep, wd, turnover.get(a, 0.0), SIM_COST_BPS)
         is_elig = b_eff > MINCAP                           # late funding is valid capital, not profit
@@ -839,6 +848,7 @@ def main():
                      "sim_cost": round(sim_cost, 4),
                      "ret_pct": allret, "dd_pct": drawdown(a), "eligible": is_elig,
                      "holds": holds.get(a, []), "win": win,
+                     "costbasis_fallback": costbasis_missing,
                      "price_flags": [s for s, _ in holds.get(a, []) if s in PRICE_OVERRIDES]})
     def scoring(r):
         return (r.get("eligible", False) and r.get("traded", False)

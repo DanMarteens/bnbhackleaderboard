@@ -20,13 +20,19 @@ flock -n 9 || exit 0
 # without making every minute refresh pay for an archive scan.
 now=$(date +%s)
 last=0
+force_costbasis=0
 [ -f "$ENUM_STAMP" ] && last=$(cat "$ENUM_STAMP" 2>/dev/null || echo 0)
 if [ -n "${ARCHIVE_RPC:-}" ] && [ $((now - last)) -ge 300 ]; then
   "$PY" scripts/leaderboard.py --enumerate >>"$LOG" 2>&1
   date +%s >"$ENUM_STAMP"
+  force_costbasis=1
 fi
 
-"$PY" scripts/flows_costbasis.py >>"$LOG" 2>&1
+if [ "$force_costbasis" -eq 1 ]; then
+  "$PY" scripts/flows_costbasis.py --force >>"$LOG" 2>&1
+else
+  "$PY" scripts/flows_costbasis.py >>"$LOG" 2>&1
+fi
 "$PY" scripts/leaderboard.py >>"$LOG" 2>&1
 
 # Refuse to publish a partial registry. This is the production rollback guard:
