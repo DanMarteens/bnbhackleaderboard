@@ -490,10 +490,10 @@
 "stable": false
 },
 "SLX": {
-"address": "0x8A063A9ff4dE28dcB87117cc759BE6cE70e09F81",
-"decimals": 18,
-"priceUsd": 0.0011643745423705887,
-"ambiguous": true,
+"address": "0x02bcC4C181B83a8c0A342BC003389CbEcb4BC54D",
+"decimals": 6,
+"priceUsd": 0.2,
+"ambiguous": false,
 "stable": false
 },
 "UB": {

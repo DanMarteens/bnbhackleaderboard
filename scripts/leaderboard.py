@@ -12,7 +12,7 @@ Usage:
   python scripts/leaderboard.py            # refresh participants + value + rank
   python scripts/leaderboard.py --baseline # also write the start snapshot (run at go-live)
 """
-import json, os, sys, time, urllib.request
+import hashlib, json, os, sys, time, urllib.request
 from eth_hash.auto import keccak
 from eth_abi import encode as abi_encode, decode as abi_decode
 
@@ -192,9 +192,15 @@ CACHE_TTL = int(os.environ.get("LB_CACHE_TTL", "300"))   # 5 min -> a 60s loop r
 # Re-valuation (Multicall3, keyless) still happens every run, so values stay fresh.
 
 
-def _cache_get(name, ttl=CACHE_TTL):
+def _cache_key(obj):
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _cache_get(name, ttl=CACHE_TTL, key=None):
     try:
         d = json.load(open(os.path.join(ROOT, "dashboard", "_c_" + name + ".json")))
+        if key is not None and d.get("_key") != key:
+            return None
         if int(time.time()) - d.get("_ts", 0) < ttl:
             return d.get("v")
     except Exception:
@@ -202,10 +208,12 @@ def _cache_get(name, ttl=CACHE_TTL):
     return None
 
 
-def _cache_put(name, v):
+def _cache_put(name, v, key=None):
     try:
-        json.dump({"_ts": int(time.time()), "v": v},
-                  open(os.path.join(ROOT, "dashboard", "_c_" + name + ".json"), "w"))
+        payload = {"_ts": int(time.time()), "v": v}
+        if key is not None:
+            payload["_key"] = key
+        json.dump(payload, open(os.path.join(ROOT, "dashboard", "_c_" + name + ".json"), "w"))
     except Exception:
         pass
 
@@ -221,7 +229,8 @@ def dex_prices(tokens):
     guard for CMC marks: only a >DEX_DEVIATION discrepancy backed by >=DEX_MIN_LIQUIDITY
     changes the mark. Cached so a one-minute refresh does not hammer the public endpoint.
     """
-    cached = _cache_get("dex", 300)
+    cache_key = _cache_key({s: a.lower() for s, a in tokens.items()})
+    cached = _cache_get("dex", 300, cache_key)
     if cached is not None:
         return cached
     addr_sym = {a.lower(): s for s, a in tokens.items()}
@@ -248,7 +257,7 @@ def dex_prices(tokens):
                 best[sym] = {"price": px, "liquidity": liq}
         time.sleep(0.05)
     if best:
-        _cache_put("dex", best)
+        _cache_put("dex", best, cache_key)
     return best
 
 
@@ -328,14 +337,15 @@ def cmc_resolve_ids(symbols):
 def cmc_prices(symbols):
     """Live USD prices from the CoinMarketCap MCP (our key) for the eligible universe.
     Resolves ids once (cached), then batches get_crypto_quotes_latest. Cached 10 min."""
-    cached = _cache_get("cmc", 600)
-    if cached is not None:
-        return cached
     if not os.environ.get("CMC_MCP_API_KEY"):
         return {}
     idmap = cmc_resolve_ids(symbols)
     if not idmap:
         return {}
+    cache_key = _cache_key(idmap)
+    cached = _cache_get("cmc", 600, cache_key)
+    if cached is not None:
+        return cached
     id2sym = {str(v): k for k, v in idmap.items()}
     out = {}
     try:
@@ -371,7 +381,7 @@ def cmc_prices(symbols):
             json.dump(last, open(LASTPX_F, "w"))
         except Exception:
             pass
-        _cache_put("cmc", out)
+        _cache_put("cmc", out, cache_key)
     return out
 
 
