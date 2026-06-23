@@ -188,9 +188,8 @@ function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
    ${STARTED&&ranked(r)&&WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
    ${tag?`<span class="idle" title="not scoring: needs >=1 swap this UTC day AND >=$1 in-scope balance">${tag}</span>`:''}
-   ${r.dep>1?`<span class="dep" title="external deposits since go-live — excluded from PnL">+$${r.dep>=1000?Math.round(r.dep).toLocaleString():Math.round(r.dep)} dep</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
-  <div class="vv">${fmt(r.value)}${(WIN==='all'&&r.base)?`<span style="display:block;font-size:10px;opacity:.45;font-weight:400" title="deposit-adjusted stake: go-live capital + net deposits already added in, so PnL nets deposits out">from ${fmt(r.base)}${r.dep>1?` · incl $${Math.round(r.dep)} dep`:''}</span>`:''}</div><div class="vv pnlcol">${pct(winv(r))}</div>
+  <div class="vv">${fmt(r.value)}</div><div class="vv pnlcol">${pct(winv(r))}</div>
   <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="ddcol">${dq(r.dd_pct||0)}</div></div>
   <div class="det"><div class="dethold">${h}</div></div></div>`;}
 function render(){let rs=R.slice();
