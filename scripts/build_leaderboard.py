@@ -166,11 +166,11 @@ const STARTED=LIVE&&R.some(r=>{const v=r.win&&r.win.all;return v!=null&&Math.abs
 // hour that starts sub-$1 at 0% and require >=1 swap/day, so idle or sub-$1 wallets drop
 // below the divider. Pre-go-live (!LIVE) everyone is listed.
 const RANK_MIN_USD=1.0;
-const ranked=r=>!LIVE||(r.traded&&r.value>=RANK_MIN_USD);
+const ranked=r=>!LIVE||(r.eligible!==false&&r.traded&&r.value>=RANK_MIN_USD);
 const rankSort=(a,b)=>((ranked(b)?1:0)-(ranked(a)?1:0))||((winv(b)??-1e9)-(winv(a)??-1e9))||tb(a,b);
 function ranks(){let i=0;R.slice().sort(rankSort).forEach(r=>{r._rk=ranked(r)?(++i):null;});}
 function stats(){const rv=R.map(winv).filter(v=>v!=null),av=rv.length?rv.reduce((a,b)=>a+b,0)/rv.length:null;
- $('stats').innerHTML=[['Agents',S.n],['Funded',S.funded],
+ $('stats').innerHTML=[['Agents',S.n],['Eligible at start',(S.eligible!=null?S.eligible:S.funded)+'/'+S.n],
   LIVE&&S.trading!=null?['Trading',S.trading+'/'+S.n]:null,['Deployed',fmt(S.deployed||0)],
   LIVE?['In profit',R.filter(r=>(winv(r)||0)>0).length]:null,
   LIVE?['Avg PnL',av==null?'—':(av>=0?'+':'')+av.toFixed(2)+'%']:null,
@@ -182,12 +182,12 @@ $('thead').innerHTML=cols.map(c=>`<span class="${c[2]?'num':''} ${c[3]||''}" dat
 $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if(k)el.onclick=()=>{dir=(key===k)?-dir:-1;key=k;render();};});
 function rowHTML(r){const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
  const notRanked=LIVE&&!ranked(r);
- const tag=!notRanked?'':(!r.traded?'no trade today':'under $1');   // why it's below the line
+ const tag=!notRanked?'':(r.eligible===false?'no start balance':(!r.traded?'no trade today':'under $1'));   // why it's below the line
  return `<div class="rw"><div class="row ${STARTED&&ranked(r)&&r._rk<=5?'r'+r._rk:''} ${notRanked?'idlerow':''}" onclick="this.nextElementSibling.classList.toggle('open')">
   <div class="n">${r._rk==null?'·':r._rk}</div>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
    ${STARTED&&ranked(r)&&WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
-   ${tag?`<span class="idle" title="not scoring: needs >=1 swap this UTC day AND >=$1 in-scope balance">${tag}</span>`:''}
+   ${tag?`<span class="idle" title="${r.eligible===false?'ineligible: held no in-scope balance at go-live (Jun 22 00:00 UTC); funding the wallet later cannot buy eligibility':'not scoring: needs >=1 swap this UTC day AND >=$1 in-scope balance'}">${tag}</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="vv">${fmt(r.value)}</div><div class="vv pnlcol">${pct(winv(r))}</div>
   <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="ddcol">${dq(r.dd_pct||0)}</div></div>

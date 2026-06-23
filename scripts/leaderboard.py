@@ -37,7 +37,6 @@ OUT_F = os.path.join(ROOT, "dashboard", "leaderboard.json")
 HIST_F = os.path.join(ROOT, "dashboard", "history.json")
 GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} captured at baseline
 FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
-LAZY_F = os.path.join(ROOT, "dashboard", "lb_lazy.json")    # late-funders' first-funded baseline
 BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # (legacy) native-BNB deposits
 FLOWS_CB_F = os.path.join(ROOT, "dashboard", "flows_costbasis.json")  # cost-basis flows {agent:[dep,wd]}
 LASTPX_F = os.path.join(ROOT, "dashboard", "last_prices.json")    # carry-forward price store (feed-gap guard)
@@ -532,7 +531,7 @@ def main():
 
     now = int(time.time())
     baseline = {}
-    funded_credit = {}          # per-agent: initial funding that set a lazy baseline (not a deposit)
+    eligible = {}               # per-agent: held >= MINCAP eligible balance at the FROZEN go-live block
 
     if do_baseline:
         json.dump(vals, open(BASE_F, "w")); baseline = vals
@@ -546,29 +545,16 @@ def main():
             golive_base = json.load(open(BASE_F))     # IMMUTABLE go-live snapshot (never rewritten)
         except Exception:
             golive_base = {}
-        try:
-            lazy = json.load(open(LAZY_F))
-        except Exception:
-            lazy = {}
-        # Late funders (go-live value < MINCAP) get their baseline anchored to the FIRST funded
-        # snapshot. Crucially we ALSO remember that funding amount (funded_credit) so it is NOT
-        # double-counted as a deposit later — the double-count was showing them at -100%.
-        changed = False
-        for a in agents:
-            if (golive_base.get(a, 0) or 0) < MINCAP and vals.get(a, 0) >= MINCAP and a not in lazy:
-                lazy[a] = vals.get(a, 0); changed = True
-        if changed:
-            try:
-                json.dump(lazy, open(LAZY_F, "w"))
-            except Exception:
-                pass
+        # Start-eligibility is FROZEN at the go-live block: a wallet must have held >= MINCAP of
+        # eligible balance when the trading window opened (official rule). Wallets that started
+        # empty stay VISIBLE but never get a baseline, a return, or a rank — funding the wallet
+        # after go-live cannot buy eligibility. (Replaces the old late-funder "lazy baseline"
+        # credit, which let zero-at-start wallets appear in — and top — the prize ranks.)
         for a in agents:
             gb = golive_base.get(a, 0) or 0
-            if gb >= MINCAP:
+            eligible[a] = gb >= MINCAP
+            if eligible[a]:
                 baseline[a] = gb
-            else:
-                baseline[a] = lazy.get(a, gb)
-                funded_credit[a] = max(0.0, baseline[a] - gb)   # exclude initial funding from deposits
 
     # ---- one on-chain pass: net deposits (capital base) + who traded today ----
     flows = {a: 0.0 for a in agents}
@@ -589,14 +575,6 @@ def main():
         except Exception:
             dsb = gl
         flows, swaps, traded_today = scan_activity(agents, gl, dsb, tokens, prices, decimals)
-
-    # Cap funded_credit at the actually-DETECTED inflow. The credit only exists to undo a
-    # double-count (funding counted as BOTH baseline and deposit). If the funding came via a
-    # contract (not detected as a flow), there's nothing to undo -> capping prevents an
-    # over-subtraction that otherwise shows late funders at a fake +100%.
-    for a in agents:
-        if funded_credit.get(a):
-            funded_credit[a] = min(funded_credit[a], max(0.0, flows.get(a, 0.0)))
 
     # ---- history time-series (append + cap) -> enables sparklines/24h/drawdown ----
     try:
@@ -682,21 +660,19 @@ def main():
         # kept; only external flows are netted. Deposits go in the DENOMINATOR, withdrawals add back
         # to value -> depositing/withdrawing can't move the rank, only trading does.
         dep, wd = costflow.get(a, (0.0, 0.0))
-        if a in funded_credit:
-            # Late funder: go-live eligible ~ 0, so the stake IS the capital it injected.
-            b_eff = dep if dep > MINCAP else (baseline.get(a) or 0.0)
-        else:
-            b_eff = (baseline.get(a) or 0.0) + dep         # real go-live stake + later deposits
-        allret = round(((v + wd) / b_eff - 1) * 100, 2) if b_eff > MINCAP else None
+        is_elig = eligible.get(a, True)                    # frozen at go-live; pre-launch -> all shown
+        b_eff = (baseline.get(a) or 0.0) + dep             # go-live stake + later deposits
+        allret = (round(((v + wd) / b_eff - 1) * 100, 2)
+                  if is_elig and b_eff > MINCAP else None)
         win = {"all": allret}                          # All + Day 1..Day 7 (UTC days)
         for n in range(1, HACK_DAYS + 1):
-            win["d%d" % n] = dayret_n(s, n, b_eff)
+            win["d%d" % n] = dayret_n(s, n, b_eff) if is_elig else None
         rows.append({"agent": a, "value": v, "base": round(b_eff, 2), "dep": round(dep - wd, 2),
                      "trades": swaps.get(a, 0), "traded": traded_today.get(a, 0) >= 1,
-                     "ret_pct": allret, "dd_pct": drawdown(a),
+                     "ret_pct": allret, "dd_pct": drawdown(a), "eligible": is_elig,
                      "holds": holds.get(a, []), "win": win})
-    if baseline:   # live: active traders first (>=1 swap today), then by return; ties neutral
-        rows.sort(key=lambda r: (not r["traded"],
+    if baseline:   # live: eligible first, then active traders (>=1 swap today), then by return
+        rows.sort(key=lambda r: (not r.get("eligible", True), not r["traded"],
                                  -(r["ret_pct"] if r["ret_pct"] is not None else -1e9), r["agent"]))
     else:          # pre-go-live: no returns yet -> just surface the funded agents
         rows.sort(key=lambda r: r["value"], reverse=True)
@@ -704,15 +680,17 @@ def main():
         r["rank"] = i + 1
 
     has_base = bool(baseline)
-    rets = [r["ret_pct"] for r in rows if r["ret_pct"] is not None]
+    elig_rows = [r for r in rows if r.get("eligible")]       # all stats below are over eligible-at-start only
+    rets = [r["ret_pct"] for r in elig_rows if r["ret_pct"] is not None]
     stats = {
         "n": len(agents),
+        "eligible": sum(1 for r in rows if r.get("eligible")),
         "funded": sum(1 for r in rows if r["value"] > 0),
-        "trading": (sum(1 for r in rows if r.get("traded")) if has_base else None),
+        "trading": (sum(1 for r in elig_rows if r.get("traded")) if has_base else None),
         "deployed": round(sum(r["value"] for r in rows), 2),
-        "in_profit": (sum(1 for r in rows if (r["ret_pct"] or 0) > 0) if has_base else None),
+        "in_profit": (sum(1 for r in elig_rows if (r["ret_pct"] or 0) > 0) if has_base else None),
         "avg_ret": (round(sum(rets) / len(rets), 2) if rets else None),
-        "survivors": (sum(1 for r in rows if r["dd_pct"] < DQ * 100) if has_base else None),
+        "survivors": (sum(1 for r in elig_rows if r["dd_pct"] < DQ * 100) if has_base else None),
         "dq_pct": DQ * 100,
     }
     out = {"generated_ts": now, "n": len(agents), "has_baseline": has_base,
