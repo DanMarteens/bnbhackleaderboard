@@ -925,9 +925,8 @@ def main():
         "in_profit": (sum(1 for r in rows if scoring(r) and (r["ret_pct"] or 0) > 0)
                       if has_base else None),
         "avg_ret": (round(sum(rets) / len(rets), 2) if rets else None),
-        "survivors": (sum(1 for r in elig_rows if r.get("dd_verified") and r["dd_pct"] < DQ * 100)
+        "survivors": (sum(1 for r in elig_rows if r["dd_pct"] < DQ * 100)
                       if has_base else None),
-        "risk_pending": (sum(1 for r in elig_rows if not r.get("dd_verified")) if has_base else None),
         "dq_pct": DQ * 100,
     }
     out = {"generated_ts": now, "n": len(agents), "has_baseline": has_base,
