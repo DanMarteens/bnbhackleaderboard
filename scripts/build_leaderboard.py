@@ -100,6 +100,7 @@ background:
 .ext{margin-left:auto;color:var(--mut);text-decoration:none;font-size:13px;opacity:.55;transition:.15s}.ext:hover{color:var(--gold);opacity:1}
 .vv{font:700 13px/1 var(--mono);text-align:right}
 .pos{color:var(--g)}.neg{color:var(--r)}.zero{color:var(--mut)}
+.ddpending{font:700 10px/1 var(--mono);color:#ffb84d;letter-spacing:.04em;text-transform:uppercase}
 .dqcell{display:flex;align-items:center;gap:8px}
 .dqwrap{height:6px;flex:1;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden}
 .dqv{font:600 11px/1 var(--mono);color:var(--mut);width:36px;text-align:right}
@@ -127,14 +128,19 @@ background:
   <input id="minv" class="inp" type="number" placeholder="min $"/>
   <div class="selwrap"><select id="flt" class="sel">
     <option value="all">all agents</option>
+    <option value="scoring">scoring only</option>
     <option value="funded">funded only</option>
     <option value="profit">in profit</option>
+    <option value="risk_pending">risk pending</option>
+    <option value="risk_cleared">risk cleared</option>
+    <option value="not_scoring">not scoring</option>
   </select></div>
 </div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
 <div class="foot">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
   Strict trade = eligible token in + eligible token out in the same transaction. Deposits, withdrawals and BNB conversions never count as trades.<br>
   PnL uses transaction-time capital cost basis and a liquid BSC DEX guard for divergent CMC marks. ⚖ marks a guarded token.<br>
+  Click any row to expand token holdings. <b>pending</b> drawdown means PnL is live, but full hourly risk history is still being reconstructed.<br>
   Updated <span id="upd"></span> · refreshes every ~30 min · not affiliated with organizers.
   <div class="by">built by <b><a href="https://x.com/itsabigdill" target="_blank" rel="noopener">@itsabigdill</a></b>
    · <a href="https://github.com/DanMarteens" target="_blank" rel="noopener">github</a>
@@ -195,12 +201,18 @@ function rowHTML(r){const pf=new Set(r.price_flags||[]);
    ${tag?`<span class="idle" title="${r.eligible===false?'not funded with eligible capital':'not scoring: requires a strict eligible-token swap on every active UTC day and >=$1 in-scope'}">${tag}</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="vv">${fmt(r.value)}</div><div class="vv pnlcol">${pct(winv(r))}</div>
-  <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="ddcol" title="${r.dd_verified===false?'full hourly history unavailable':'maximum hourly drawdown'}">${r.dd_verified===false?'—':dq(r.dd_pct||0)}</div></div>
+  <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="vv ddcol" title="${r.dd_verified===false?'PnL is live; full hourly drawdown history is still being reconstructed':'maximum hourly drawdown'}">${r.dd_verified===false?'<span class="ddpending">pending</span>':dq(r.dd_pct||0)}</div></div>
   <div class="det"><div class="dethold">${h}</div></div></div>`;}
 function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
  const mv=parseFloat($('minv').value);if(!isNaN(mv))rs=rs.filter(r=>r.value>=mv);
- const f=$('flt').value;if(f==='funded')rs=rs.filter(r=>r.value>0);else if(f==='profit')rs=rs.filter(r=>(winv(r)||0)>0);
+ const f=$('flt').value;
+ if(f==='scoring')rs=rs.filter(r=>ranked(r));
+ else if(f==='funded')rs=rs.filter(r=>r.value>0);
+ else if(f==='profit')rs=rs.filter(r=>(winv(r)||0)>0);
+ else if(f==='risk_pending')rs=rs.filter(r=>r.dd_verified===false);
+ else if(f==='risk_cleared')rs=rs.filter(r=>r.dd_verified!==false);
+ else if(f==='not_scoring')rs=rs.filter(r=>LIVE&&!ranked(r));
  rs.sort((a,b)=>{const av=key==='ret_pct'?(winv(a)??-1e9):(a[key]??-1e9),bv=key==='ret_pct'?(winv(b)??-1e9):(b[key]??-1e9);return ((ranked(b)?1:0)-(ranked(a)?1:0))||((av-bv)*dir)||tb(a,b);});
  let html='',div=false;
  rs.forEach(r=>{if(LIVE&&!ranked(r)&&!div){html+='<div class="splitrow">Not scoring — daily swap, capital, $1 minimum, or drawdown gate not satisfied</div>';div=true;}html+=rowHTML(r);});
