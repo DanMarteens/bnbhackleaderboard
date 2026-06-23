@@ -34,6 +34,7 @@ else
   "$PY" scripts/flows_costbasis.py >>"$LOG" 2>&1
 fi
 "$PY" scripts/leaderboard.py >>"$LOG" 2>&1
+"$PY" scripts/audit_leaderboard.py >>"$LOG" 2>&1
 
 # Refuse to publish a partial registry. This is the production rollback guard:
 # the known registry had 123 agents when installed, and can only grow.

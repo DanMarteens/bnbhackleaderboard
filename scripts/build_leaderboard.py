@@ -173,7 +173,8 @@ function stats(){const rv=R.map(winv).filter(v=>v!=null),av=rv.length?rv.reduce(
   LIVE&&S.trading!=null?['Daily-qualified',S.trading+'/'+S.n]:null,['Deployed',fmt(S.deployed||0)],
   LIVE?['In profit',R.filter(r=>(winv(r)||0)>0).length]:null,
   LIVE?['Avg PnL',av==null?'—':(av>=0?'+':'')+av.toFixed(2)+'%']:null,
-  LIVE?['Survivors',S.survivors+'/'+S.n]:null].filter(Boolean)
+  LIVE?['Risk-cleared',S.survivors+'/'+(S.eligible||S.n)]:null,
+  LIVE&&S.risk_pending?['Risk pending',S.risk_pending]:null].filter(Boolean)
   .map(([k,v])=>`<div class="st"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');}
 if(!LIVE){$('banner').className='banner';$('banner').innerHTML='⏳ <b>Competition starts Jun 22, 00:00 UTC.</b> Live ranking by total return begins then; showing registered agents + funding for now.';}
 else if((D.method||{}).sim_cost_bps===0){$('banner').className='banner';$('banner').innerHTML='Execution price, DEX fees and slippage are already reflected on-chain. The additional organizer simulated-cost rate is shown as 0 until an official rate is published.';}
@@ -183,15 +184,18 @@ $('thead').querySelectorAll('span[data-k]').forEach(el=>{const k=el.dataset.k;if
 function rowHTML(r){const pf=new Set(r.price_flags||[]);
  const h=(r.holds||[]).map(x=>`<span class="chip">${x[0]}${pf.has(x[0])?' ⚖':''} <b>$${x[1]}</b></span>`).join('')||'<span class="chip">no in-scope holdings</span>';
  const notRanked=LIVE&&!ranked(r);
- const tag=!notRanked?'':(r.eligible===false?'no capital':((r.dd_pct||0)>=(S.dq_pct||30)?'drawdown DQ':(!r.traded?`missing day ${(r.missing_days||[]).join(',')}`:'under $1')));
+ const noTrade=!(r.trades||0);
+ const missing=(r.missing_days||[]);
+ const tag=!notRanked?'':(r.eligible===false?'no capital':((r.dd_pct||0)>=(S.dq_pct||30)?'drawdown DQ':(!r.traded?(noTrade?'no eligible swaps':`missing day ${missing.join(',')}`):'under $1')));
  return `<div class="rw"><div class="row ${STARTED&&ranked(r)&&r._rk<=5?'r'+r._rk:''} ${notRanked?'idlerow':''}" onclick="this.nextElementSibling.classList.toggle('open')">
   <div class="n">${r._rk==null?'·':r._rk}</div>
   <div class="ag"><span class="dot" style="background:${dot(r.agent)}"></span><span class="adr">${short(r.agent)}</span>
    ${STARTED&&ranked(r)&&WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
+   ${LIVE&&ranked(r)&&r.dd_verified===false?`<span class="idle" title="full hourly drawdown history is unavailable; PnL is audited, risk gate is pending">risk pending</span>`:''}
    ${tag?`<span class="idle" title="${r.eligible===false?'not funded with eligible capital':'not scoring: requires a strict eligible-token swap on every active UTC day and >=$1 in-scope'}">${tag}</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="vv">${fmt(r.value)}</div><div class="vv pnlcol">${pct(winv(r))}</div>
-  <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="ddcol">${dq(r.dd_pct||0)}</div></div>
+  <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="ddcol" title="${r.dd_verified===false?'full hourly history unavailable':'maximum hourly drawdown'}">${r.dd_verified===false?'—':dq(r.dd_pct||0)}</div></div>
   <div class="det"><div class="dethold">${h}</div></div></div>`;}
 function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));

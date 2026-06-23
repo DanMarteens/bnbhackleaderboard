@@ -29,9 +29,11 @@ WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"
 USDT_A = "0x55d398326f99059fF775485246999027B3197955"
 _GAO_SEL = "0x" + L.keccak(b"getAmountsOut(uint256,address[])")[:4].hex()
 _px_at = {}                                             # (token_addr, block_hex) -> usd price, cached
+_block_ts = {}
 STABLE_ADDRS = set()                                    # eligible stablecoin addresses (populated in main)
 
 OUT_F = os.path.join(ROOT, "dashboard", "flows_costbasis.json")
+TIMELINE_F = os.path.join(ROOT, "dashboard", "flows_timeline.json")
 GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")
 PART_F = os.path.join(ROOT, "dashboard", "participants.json")
 REFRESH_S = 840
@@ -96,6 +98,13 @@ def _price_at_block(token_addr, decimals, block_hex, px_by_addr):
     return px
 
 
+def _block_timestamp(block_hex):
+    if block_hex not in _block_ts:
+        b = rpc("eth_getBlockByNumber", [block_hex, False])
+        _block_ts[block_hex] = int(b["timestamp"], 16)
+    return _block_ts[block_hex]
+
+
 def _leg_usd(t, px_by_addr):
     """USD value of a transfer leg, priced AT ITS OWN BLOCK, if the token is eligible else 0."""
     ca = (t.get("contractAddress") or "").lower()
@@ -115,20 +124,26 @@ def agent_flows(addr, px_by_addr, golive_hex, latest_hex):
     for t in _transfers(addr, "toAddress", golive_hex, latest_hex):
         v = _leg_usd(t, px_by_addr)
         if v > 0:
-            by_tx.setdefault(t.get("hash"), [0.0, 0.0])[0] += v       # [in, out]
+            row = by_tx.setdefault(t.get("hash"), [0.0, 0.0, t.get("blockNum")])
+            row[0] += v                                               # [in, out, block]
     for t in _transfers(addr, "fromAddress", golive_hex, latest_hex):
         v = _leg_usd(t, px_by_addr)
         if v > 0:
-            by_tx.setdefault(t.get("hash"), [0.0, 0.0])[1] += v
+            row = by_tx.setdefault(t.get("hash"), [0.0, 0.0, t.get("blockNum")])
+            row[1] += v
     dep = wd = 0.0
-    for _, (vin, vout) in by_tx.items():
+    events = []
+    for _, (vin, vout, block_hex) in by_tx.items():
         if vin > 0 and vout > 0:
             continue                 # eligible<->eligible swap -> trading, neutral
         elif vin > 0:
             dep += vin               # deposit (token in, or BNB->token buy)
+            events.append([_block_timestamp(block_hex), round(vin, 2)])
         elif vout > 0:
             wd += vout               # withdrawal (token out, or token->BNB cash-out)
-    return round(dep, 2), round(wd, 2)
+            events.append([_block_timestamp(block_hex), round(-vout, 2)])
+    events.sort()
+    return round(dep, 2), round(wd, 2), events
 
 
 def main():
@@ -155,17 +170,49 @@ def main():
         return
     golive_hex, latest_hex = hex(golive), hex(latest)
 
-    out = {}
+    # A refresh may suffer per-wallet archive RPC failures. Never rebuild the file
+    # from an empty dict: that silently turns previously verified deposits into
+    # "$0 deposited" and makes external funding appear as trading profit.
+    try:
+        previous = {
+            a.lower(): [float(v[0]), float(v[1])]
+            for a, v in json.load(open(OUT_F)).items()
+        }
+    except Exception:
+        previous = {}
+    try:
+        previous_timeline = {
+            a.lower(): v for a, v in json.load(open(TIMELINE_F)).items()
+        }
+    except Exception:
+        previous_timeline = {}
+    out = dict(previous)
+    timelines = dict(previous_timeline)
+    failed = []
     for a in sorted(agents):
         try:
-            dep, wd = agent_flows(a, px_by_addr, golive_hex, latest_hex)
-            if dep > 0.01 or wd > 0.01:
-                out[a] = [dep, wd]
+            dep, wd, events = agent_flows(a, px_by_addr, golive_hex, latest_hex)
+            # Store an explicit zero as proof that this wallet was scanned
+            # successfully; absence is reserved for "not yet verified".
+            out[a] = [dep, wd]
+            timelines[a] = events
         except Exception as e:
+            failed.append(a)
             print("flows_costbasis: %s -> %s" % (a[:10], str(e)[:80]), file=sys.stderr)
-    json.dump(out, open(OUT_F, "w"))
-    print("flows_costbasis: %d agents, %d with flows | deposits $%.0f, withdrawals $%.0f"
-          % (len(agents), len(out), sum(v[0] for v in out.values()), sum(v[1] for v in out.values())))
+    # Keep only current participants and replace atomically so readers never see a
+    # truncated JSON file during the minute-loop deployment.
+    out = {a: out[a] for a in sorted(agents) if a in out}
+    timelines = {a: timelines[a] for a in sorted(agents) if a in timelines}
+    tmp = OUT_F + ".tmp"
+    json.dump(out, open(tmp, "w"))
+    os.replace(tmp, OUT_F)
+    tmp_timeline = TIMELINE_F + ".tmp"
+    json.dump(timelines, open(tmp_timeline, "w"))
+    os.replace(tmp_timeline, TIMELINE_F)
+    active = [v for v in out.values() if v[0] > 0.01 or v[1] > 0.01]
+    print("flows_costbasis: %d/%d verified, %d failed, %d with flows | deposits $%.0f, withdrawals $%.0f"
+          % (len(out), len(agents), len(failed), len(active),
+             sum(v[0] for v in active), sum(v[1] for v in active)))
 
 
 if __name__ == "__main__":

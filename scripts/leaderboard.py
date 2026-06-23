@@ -39,6 +39,7 @@ GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} cap
 FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
 BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # (legacy) native-BNB deposits
 FLOWS_CB_F = os.path.join(ROOT, "dashboard", "flows_costbasis.json")  # cost-basis flows {agent:[dep,wd]}
+FLOWS_TIMELINE_F = os.path.join(ROOT, "dashboard", "flows_timeline.json")
 LASTPX_F = os.path.join(ROOT, "dashboard", "last_prices.json")    # carry-forward price store (feed-gap guard)
 MAXHIST = 200          # hourly starts + current point; comfortably covers the event
 MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
@@ -721,6 +722,26 @@ def main():
         costflow = json.load(open(FLOWS_CB_F))
     except Exception:
         costflow = {}
+    try:
+        flow_timeline = json.load(open(FLOWS_TIMELINE_F))
+    except Exception:
+        flow_timeline = {}
+
+    # Convert legacy flow-timeline entries from block number to timestamp. Newer
+    # entries are already stored as timestamps, so this is normally a no-op.
+    block_ts = {}
+    for events in flow_timeline.values():
+        for event in events:
+            if event and event[0] < 1_000_000_000 and event[0] not in block_ts:
+                try:
+                    b = rpc("eth_getBlockByNumber", [hex(int(event[0])), False])
+                    block_ts[event[0]] = int(b["timestamp"], 16)
+                except Exception:
+                    block_ts[event[0]] = now
+
+    def flow_at(a, ts):
+        return round(sum(float(delta) for block, delta in flow_timeline.get(a, [])
+                         if (block_ts.get(block) if block < 1_000_000_000 else block) <= ts), 2)
 
     # ---- history time-series (append + cap) -> enables sparklines/24h/drawdown ----
     try:
@@ -748,7 +769,8 @@ def main():
         # A participant discovered by a later full-registry scan is absent from older
         # snapshots. Absence means "unknown", not a $0 portfolio (which created a fake
         # -100% day and drawdown).
-        return [(h["ts"], h["v"][a], h.get("f", {}).get(a, 0.0))
+        return [(h["ts"], h["v"][a],
+                 flow_at(a, h["ts"]) if a in flow_timeline else h.get("f", {}).get(a, 0.0))
                 for h in calc_hist if a in h.get("v", {})]
 
     def drawdown(a):
@@ -757,8 +779,7 @@ def main():
         # Computing on value (not the deposit-adjusted dollar series, which hovers near zero and
         # blew the % into the thousands) keeps it bounded; rebasing on flow changes stops deposits
         # from registering as drawdown. Real price declines, which carry no flow change, still count.
-        raw = [(h["v"][a], h.get("f", {}).get(a, 0.0))
-               for h in calc_hist if a in h.get("v", {})]
+        raw = [(v, f) for _, v, f in raw_series(a)]
         # De-spike single-snapshot price glitches (a held token momentarily unpriced) with median-of-3.
         vs = [x[0] for x in raw]
         clean = list(vs)
@@ -776,6 +797,19 @@ def main():
                 dd = max(dd, (seg_peak - v) / seg_peak)
             prev_f = f
         return round(min(dd, 1.0) * 100, 2)            # clamp as a safety net
+
+    def drawdown_verified(a):
+        """Whether hourly observations cover the wallet's full funded period."""
+        s = raw_series(a)
+        if not s or a not in flow_timeline:
+            return False
+        funded_ts = GO_LIVE_TS if (baseline.get(a) or 0.0) > MINCAP else None
+        if funded_ts is None:
+            positive = [(block_ts.get(block) if block < 1_000_000_000 else block)
+                        for block, delta in flow_timeline.get(a, [])
+                        if float(delta) > 0]
+            funded_ts = min(positive) if positive else None
+        return funded_ts is not None and s[0][0] <= funded_ts + 7200
 
     import datetime as _dt
     def _day_bounds(n):            # n=1..7 -> (start_ts, end_ts) UTC; Day 1 = Jun 22
@@ -841,12 +875,14 @@ def main():
         win = {"all": allret}                          # All + Day 1..Day 7 (UTC days)
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, baseline.get(a) or 0.0) if is_elig else None
+        dd = drawdown(a)
+        dd_ok = drawdown_verified(a)
         rows.append({"agent": a, "value": v, "base": round(b_eff, 2), "dep": round(dep - wd, 2),
                      "trades": swaps.get(a, 0), "traded": daily_ok,
                      "traded_today": traded_today.get(a, 0) >= 1,
                      "daily_trades": counts, "missing_days": missing_days,
                      "sim_cost": round(sim_cost, 4),
-                     "ret_pct": allret, "dd_pct": drawdown(a), "eligible": is_elig,
+                     "ret_pct": allret, "dd_pct": dd, "dd_verified": dd_ok, "eligible": is_elig,
                      "holds": holds.get(a, []), "win": win,
                      "costbasis_fallback": costbasis_missing,
                      "price_flags": [s for s, _ in holds.get(a, []) if s in PRICE_OVERRIDES]})
@@ -879,7 +915,9 @@ def main():
         "in_profit": (sum(1 for r in rows if scoring(r) and (r["ret_pct"] or 0) > 0)
                       if has_base else None),
         "avg_ret": (round(sum(rets) / len(rets), 2) if rets else None),
-        "survivors": (sum(1 for r in elig_rows if r["dd_pct"] < DQ * 100) if has_base else None),
+        "survivors": (sum(1 for r in elig_rows if r.get("dd_verified") and r["dd_pct"] < DQ * 100)
+                      if has_base else None),
+        "risk_pending": (sum(1 for r in elig_rows if not r.get("dd_verified")) if has_base else None),
         "dq_pct": DQ * 100,
     }
     out = {"generated_ts": now, "n": len(agents), "has_baseline": has_base,
