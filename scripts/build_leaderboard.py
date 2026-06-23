@@ -110,8 +110,15 @@ background:
 .foot{text-align:center;color:var(--mut);font-size:12px;margin-top:24px;line-height:1.9}.foot b{color:var(--txt)}
 .foot a{color:var(--gold2);text-decoration:none}.foot a:hover{text-decoration:underline}
 .by{margin-top:6px;font-size:12.5px}
-@media(max-width:680px){.mark{font-size:15px}.h1{font-size:30px}.thead,.row{grid-template-columns:30px 1fr 80px 74px;gap:8px}
- .trcol,.ddcol{display:none}.pnlcol{font-size:14px}.bad{grid-template-columns:1fr}.tools{flex-direction:column;align-items:stretch}#minv{width:100%}}
+@media(max-width:680px){body{padding:24px 10px 56px}.mark{font-size:15px}.h1{font-size:30px}.bad{grid-template-columns:1fr}
+ .tools{flex-direction:column;align-items:stretch}.selwrap,.sel{width:100%}#minv{width:100%}.thead{display:none}
+ .tbl{border-radius:18px}.row{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"rank agent value" "rank pnl pnl" "rank trades dd";
+  gap:8px 10px;padding:13px 12px;align-items:center}.row .n{grid-area:rank;align-self:start;padding-top:3px}.row .ag{grid-area:agent}
+ .valcol{grid-area:value;white-space:nowrap}.pnlcol{grid-area:pnl}.trcol{grid-area:trades}.ddcol{grid-area:dd}
+ .pnlcol,.trcol,.ddcol{display:inline-flex!important;align-items:center;gap:7px;justify-content:flex-start;text-align:left;font-size:12px;color:var(--txt)}
+ .pnlcol::before{content:"PNL";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}.trcol::before{content:"TRADES";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}
+ .ddcol::before{content:"DD";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}.dqv{text-align:left;width:auto}.det.open{max-height:260px}
+ .dethold{padding:0 12px 13px 50px}.chip{font-size:10px;padding:5px 9px}}
 </style></head><body><div class="wrap">
 <div class="hero">
   <div class="mark">BNB HACK</div>
@@ -197,7 +204,7 @@ function rowHTML(r){const pf=new Set(r.price_flags||[]);
    ${STARTED&&ranked(r)&&WIN==='all'&&PRIZE[r._rk]?`<span class="prize">${PRIZE[r._rk]}</span>`:''}
    ${tag?`<span class="idle" title="${r.eligible===false?'not funded with eligible capital':'not scoring: requires a strict eligible-token swap on every active UTC day and >=$1 in-scope'}">${tag}</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
-  <div class="vv">${fmt(r.value)}</div><div class="vv pnlcol">${pct(winv(r))}</div>
+  <div class="vv valcol">${fmt(r.value)}</div><div class="vv pnlcol">${pct(winv(r))}</div>
   <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="vv ddcol" title="observed max peak-to-trough drawdown">${dq(r.dd_pct||0)}</div></div>
   <div class="det"><div class="dethold">${h}</div></div></div>`;}
 function render(){let rs=R.slice();
