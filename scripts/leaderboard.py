@@ -779,9 +779,34 @@ def main():
         # A participant discovered by a later full-registry scan is absent from older
         # snapshots. Absence means "unknown", not a $0 portfolio (which created a fake
         # -100% day and drawdown).
-        return [(h["ts"], h["v"][a],
-                 flow_at(a, h["ts"]) if a in flow_timeline else h.get("f", {}).get(a, 0.0))
-                for h in calc_hist if a in h.get("v", {})]
+        series = [(h["ts"], h["v"][a],
+                   flow_at(a, h["ts"]) if a in flow_timeline else h.get("f", {}).get(a, 0.0))
+                  for h in calc_hist if a in h.get("v", {})]
+
+        # Drawdown must start from the capital-at-risk point, not from the first later
+        # crawler snapshot. Otherwise a wallet that starts at $100 and is first observed
+        # at $99.80 incorrectly shows 0.0% max drawdown. Seed synthetic points at go-live
+        # and at external capital-flow times; flow changes rebase the peak downstream.
+        seeds = []
+        b = float(baseline.get(a) or 0.0)
+        if b > MINCAP:
+            seeds.append((GO_LIVE_TS, b, 0.0))
+        cum_flow = 0.0
+        for block, delta in flow_timeline.get(a, []):
+            ts = block_ts.get(block) if block < 1_000_000_000 else block
+            cum_flow = round(cum_flow + float(delta), 2)
+            capital_point = max(0.0, b + cum_flow)
+            if capital_point > MINCAP:
+                seeds.append((int(ts), capital_point, cum_flow))
+        out = seeds + series
+        out.sort(key=lambda x: x[0])
+        compact = []
+        for row in out:
+            if compact and compact[-1][0] == row[0]:
+                compact[-1] = row
+            else:
+                compact.append(row)
+        return compact
 
     def drawdown(a):
         # Max peak-to-trough decline of portfolio VALUE, with the peak REBASED whenever external
@@ -886,6 +911,12 @@ def main():
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, baseline.get(a) or 0.0) if is_elig else None
         dd = drawdown(a)
+        # Sanity floor: if the wallet is currently below its effective capital basis, max
+        # drawdown cannot be smaller than that current loss, even if an hourly/flow
+        # observation was missing. This prevents impossible rows like PnL -0.2%, DD 0.0%.
+        if allret is not None and allret < 0:
+            dd = max(dd, abs(allret))
+        dd = round(dd, 2)
         dd_ok = drawdown_verified(a)
         rows.append({"agent": a, "value": v, "base": round(b_eff, 2), "dep": round(dep - wd, 2),
                      "trades": swaps.get(a, 0), "traded": daily_ok,
