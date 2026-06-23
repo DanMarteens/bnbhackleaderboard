@@ -74,6 +74,7 @@ def _price_at_block(token_addr, decimals, block_hex, px_by_addr):
     key = (ca, block_hex)
     if key in _px_at:
         return _px_at[key]
+    cur = px_by_addr.get(ca, 0.0)                         # current CMC price (sanity anchor + fallback)
     px = 0.0
     for path in ([token_addr, USDT_A], [token_addr, WBNB, USDT_A]):
         try:
@@ -81,13 +82,16 @@ def _price_at_block(token_addr, decimals, block_hex, px_by_addr):
             r = rpc("eth_call", [{"to": ROUTER, "data": data}, block_hex])
             if r and r != "0x":
                 amounts = abi_decode(["uint256[]"], bytes.fromhex(r[2:]))[0]
-                px = amounts[-1] / 1e18                  # USDT has 18 decimals on BSC
+                px = amounts[-1] / 1e18                   # USDT has 18 decimals on BSC
                 if px > 0:
                     break
         except Exception:
             continue
-    if px <= 0:
-        px = px_by_addr.get(ca, 0.0)                     # fallback: current CMC price
+    # Many eligible tokens have no/thin PancakeSwap V2 pool (they trade on V3), so getAmountsOut
+    # returns garbage off by 10-100x. Trust the historical quote ONLY within a believable band of
+    # the current price (captures real moves like a halving); otherwise current price is safer.
+    if px <= 0 or (cur > 0 and not (0.25 * cur <= px <= 4.0 * cur)):
+        px = cur
     _px_at[key] = px
     return px
 
