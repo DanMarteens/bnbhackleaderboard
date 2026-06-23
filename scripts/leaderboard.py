@@ -38,7 +38,8 @@ HIST_F = os.path.join(ROOT, "dashboard", "history.json")
 GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} captured at baseline
 FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
 LAZY_F = os.path.join(ROOT, "dashboard", "lb_lazy.json")    # late-funders' first-funded baseline
-BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # native-BNB deposits (bnb_deposits.py)
+BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # (legacy) native-BNB deposits
+FLOWS_CB_F = os.path.join(ROOT, "dashboard", "flows_costbasis.json")  # cost-basis flows {agent:[dep,wd]}
 LASTPX_F = os.path.join(ROOT, "dashboard", "last_prices.json")    # carry-forward price store (feed-gap guard)
 MAXHIST = 400          # ~8 days at 30-min cadence
 MINCAP = 0.1           # everyone who traded gets a PnL; only true dust (< $0.10) is skipped
@@ -660,34 +661,30 @@ def main():
         return round((cur / prev - 1) * 100, 2)
 
     try:
-        bnb_dep = json.load(open(BNB_DEP_F))           # native-BNB deposits (EOA-funded) per agent
+        costflow = json.load(open(FLOWS_CB_F))         # cost-basis flows: {agent: [deposits, withdrawals]}
     except Exception:
-        bnb_dep = {}
+        costflow = {}
 
     rows = []
     for a in agents:
         s = series(a); v = vals.get(a, 0.0)
-        # Deposit-INVARIANT return on the ELIGIBLE sleeve. The stake is the go-live eligible value
-        # plus ALL capital that later crossed into the scored portfolio: EOA token transfers
-        # (`flows`) and native-BNB<->eligible conversions (`bnb_dep`) — BNB isn't a scored asset,
-        # so buying eligible with it is a deposit, selling back a withdrawal. Capital-in lives in
-        # the DENOMINATOR, never subtracted from value (on a tiny base a subtraction would credit
-        # the whole grown deposit to the original stake -> the +500% dust artifact).
-        net = flows.get(a, 0.0)                               # signed EOA token flow (in - out)
-        conv = bnb_dep.get(a, 0.0) or 0.0                     # net BNB->eligible conversion (signed)
-        cap_in = max(0.0, net) + max(0.0, conv)               # capital deposited into the sleeve
-        cap_out = max(0.0, -net) + max(0.0, -conv)            # capital withdrawn -> added back to value
+        # Deposit-INVARIANT return on the ELIGIBLE sleeve, from cost-basis flow accounting
+        # (flows_costbasis.py groups transfers per tx): `dep` = external capital that entered the
+        # sleeve (token deposits + BNB->token buys), `wd` = capital that left (token withdrawals +
+        # token->BNB cash-outs). Eligible<->eligible swaps are NEUTRAL, so genuine trading gains are
+        # kept; only external flows are netted. Deposits go in the DENOMINATOR, withdrawals add back
+        # to value -> depositing/withdrawing can't move the rank, only trading does.
+        dep, wd = costflow.get(a, (0.0, 0.0))
         if a in funded_credit:
-            # Late funder: go-live eligible ~ 0, so the stake IS the capital it injected (conversions
-            # + token deposits). Fall back to the lazy first-funded snapshot only if untraceable.
-            b_eff = cap_in if cap_in > MINCAP else (baseline.get(a) or 0.0)
+            # Late funder: go-live eligible ~ 0, so the stake IS the capital it injected.
+            b_eff = dep if dep > MINCAP else (baseline.get(a) or 0.0)
         else:
-            b_eff = (baseline.get(a) or 0.0) + cap_in         # real go-live stake + later deposits
-        allret = round(((v + cap_out) / b_eff - 1) * 100, 2) if b_eff > MINCAP else None
+            b_eff = (baseline.get(a) or 0.0) + dep         # real go-live stake + later deposits
+        allret = round(((v + wd) / b_eff - 1) * 100, 2) if b_eff > MINCAP else None
         win = {"all": allret}                          # All + Day 1..Day 7 (UTC days)
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, b_eff)
-        rows.append({"agent": a, "value": v, "base": round(b_eff, 2), "dep": round(cap_in - cap_out, 2),
+        rows.append({"agent": a, "value": v, "base": round(b_eff, 2), "dep": round(dep - wd, 2),
                      "trades": swaps.get(a, 0), "traded": traded_today.get(a, 0) >= 1,
                      "ret_pct": allret, "dd_pct": drawdown(a),
                      "holds": holds.get(a, []), "win": win})

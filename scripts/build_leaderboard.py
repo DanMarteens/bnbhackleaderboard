@@ -203,7 +203,6 @@ function render(){let rs=R.slice();
  $('rows').innerHTML=html||'<div style="padding:22px;text-align:center;color:var(--mut)">no agents match</div>';}
 $('q').oninput=render;$('minv').oninput=render;
 $('flt').onchange=render;
-(function(){const sel=$('wins');for(let n=1;n<=7;n++){const st=Date.UTC(2026,5,21+n),o=sel.querySelector('option[value="d'+n+'"]');if(o&&Date.now()<st){o.disabled=true;o.textContent+=' · soon';}}})();
 ranks();stats();render();
 </script></body></html>"""
 
