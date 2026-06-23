@@ -77,7 +77,7 @@ background:
 .sel:focus{border-color:rgba(56,97,251,.6);box-shadow:0 0 0 3px rgba(56,97,251,.13)}
 .sel option{background:#0d1430;color:var(--txt)}
 .tbl{overflow:hidden;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:22px;backdrop-filter:blur(24px);box-shadow:0 18px 60px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.06)}
-.thead,.row{display:grid;grid-template-columns:46px 1.6fr 112px 116px 78px 140px;align-items:center;gap:11px;padding:14px 18px}
+.thead,.row{display:grid;grid-template-columns:46px 1.55fr 112px 116px 128px 130px;align-items:center;gap:11px;padding:14px 18px}
 .pnlcol{font-weight:800;font-size:15.5px}.thead .pnlcol{font-weight:700;font-size:10.5px}
 .thead{border-bottom:1px solid var(--line);font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
 .thead span{cursor:pointer;transition:.15s}.thead span:hover{color:var(--gold2)}
@@ -110,6 +110,12 @@ background:
 .dqcell{display:flex;align-items:center;gap:8px}
 .dqwrap{height:6px;flex:1;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden}
 .dqv{font:600 11px/1 var(--mono);color:var(--mut);width:36px;text-align:right}
+.tradebox{display:flex;align-items:center;justify-content:flex-end;gap:7px}
+.tradebox .tot{font:800 13px/1 var(--mono)}
+.days{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}
+.day{font:800 8px/1 var(--mono);border-radius:5px;padding:3px 4px;color:var(--mut);background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07)}
+.day.ok{color:var(--g);background:rgba(31,210,134,.09);border-color:rgba(31,210,134,.22)}
+.day.miss{color:var(--r);background:rgba(255,84,112,.08);border-color:rgba(255,84,112,.2)}
 .det{max-height:0;overflow:hidden;transition:max-height .3s ease}.det.open{max-height:200px}
 .dethold{display:flex;flex-wrap:wrap;gap:7px;padding:2px 18px 15px}
 .chip{background:var(--glass2);border:1px solid var(--line);border-radius:10px;padding:5px 11px;font:600 11px/1 var(--mono);color:var(--mut)}
@@ -129,6 +135,7 @@ background:
  .pnlcol,.trcol,.ddcol{display:inline-flex!important;align-items:center;gap:7px;justify-content:flex-start;text-align:left;font-size:12px;color:var(--txt)}
  .pnlcol::before{content:"PNL";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}.trcol::before{content:"TRADES";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}
  .ddcol::before{content:"DD";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}.dqv{text-align:left;width:auto}.det.open{max-height:260px}
+ .tradebox{justify-content:flex-start}.days{justify-content:flex-start}.day{font-size:7.5px}
  .dethold{padding:0 12px 13px 50px}.chip{font-size:10px;padding:5px 9px}}
 </style></head><body><div class="wrap">
 <div class="hero">
@@ -184,6 +191,11 @@ const pct=v=>v==null?'<span class="zero">—</span>':`<span class="${v>0?'pos':v
 // 30% DQ line, red when severe. 30% is disqualification.
 function dq(dd){const c=dd<10?'var(--mut)':dd<22?'var(--gold)':'var(--r)';
  return `<span class="dqv" style="color:${c}">${dd.toFixed(1)}%</span>`;}
+function tradeDays(r){const ds=(r.daily_trades||[]).slice(0,7);
+ if(!LIVE||!ds.length)return `<div class="tradebox"><span class="tot">${r.trades||0}</span></div>`;
+ return `<div class="tradebox" title="Strict eligible-token swaps by UTC competition day"><span class="tot">${r.trades||0}</span><span class="days">${
+  ds.map((n,i)=>`<span class="day ${n>0?'ok':'miss'}" title="Day ${i+1}: ${n} strict eligible swap${n===1?'':'s'}">D${i+1}</span>`).join('')
+ }</span></div>`;}
 const START=Date.UTC(2026,5,22),END=Date.UTC(2026,5,29);
 function cd(){const n=Date.now();let t,l;if(n<START){t=START;l='Starts in';}else if(n<END){t=END;l='Time left';}else{$('cd').textContent='Competition ended';return;}
  const d=Math.max(0,t-n);$('cd').innerHTML=`${l} &nbsp;<b>${Math.floor(d/864e5)}d ${Math.floor(d%864e5/36e5)}h ${Math.floor(d%36e5/6e4)}m</b>`;}
@@ -226,7 +238,7 @@ function rowHTML(r){const pf=new Set(r.price_flags||[]);
    ${tag?`<span class="idle" title="${r.eligible===false?'not funded with eligible capital':'not scoring: requires a strict eligible-token swap on every active UTC day and >=$1 in-scope'}">${tag}</span>`:''}
    <a class="ext" href="https://bscscan.com/address/${r.agent}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
   <div class="vv valcol">${fmt(r.value)}</div><div class="vv pnlcol">${pct(winv(r))}</div>
-  <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${r.trades||0}</div><div class="vv ddcol" title="observed max peak-to-trough drawdown">${dq(r.dd_pct||0)}</div></div>
+  <div class="vv trcol ${LIVE&&!r.traded?'neg':''}">${tradeDays(r)}</div><div class="vv ddcol" title="observed max peak-to-trough drawdown">${dq(r.dd_pct||0)}</div></div>
   <div class="det"><div class="dethold">${h}</div></div></div>`;}
 function render(){let rs=R.slice();
  const q=$('q').value.trim().toLowerCase();if(q)rs=rs.filter(r=>r.agent.toLowerCase().includes(q));
