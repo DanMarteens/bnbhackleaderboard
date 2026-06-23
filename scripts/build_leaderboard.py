@@ -131,18 +131,6 @@ background:
     <option value="profit">in profit</option>
   </select></div>
 </div>
-<div class="wbar"><span class="wl">PnL window</span>
-  <div class="selwrap"><select id="wins" class="sel">
-    <option value="d1">Day 1 · Jun 22</option>
-    <option value="d2">Day 2 · Jun 23</option>
-    <option value="d3">Day 3 · Jun 24</option>
-    <option value="d4">Day 4 · Jun 25</option>
-    <option value="d5">Day 5 · Jun 26</option>
-    <option value="d6">Day 6 · Jun 27</option>
-    <option value="d7">Day 7 · Jun 28</option>
-    <option value="all" selected>All</option>
-  </select></div>
-</div>
 <div class="tbl"><div class="thead" id="thead"></div><div id="rows"></div></div>
 <div class="foot">Built from on-chain data · <b>permissionless &amp; verifiable</b><br>
   PnL is deposit-invariant: return = (value − net deposits) ÷ go-live capital, so depositing or withdrawing leaves the rank unchanged — only trading moves it.<br>
@@ -216,7 +204,6 @@ function render(){let rs=R.slice();
 $('q').oninput=render;$('minv').oninput=render;
 $('flt').onchange=render;
 (function(){const sel=$('wins');for(let n=1;n<=7;n++){const st=Date.UTC(2026,5,21+n),o=sel.querySelector('option[value="d'+n+'"]');if(o&&Date.now()<st){o.disabled=true;o.textContent+=' · soon';}}})();
-$('wins').onchange=()=>{WIN=$('wins').value;ranks();stats();render();};
 ranks();stats();render();
 </script></body></html>"""
 

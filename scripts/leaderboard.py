@@ -383,17 +383,20 @@ def scan_activity(agents, golive_block, day_start_block, tokens, prices, decimal
     Caveat: a deposit routed through a contract (a bridge) reads as a trade, not a flow.
     getLogs + eth_getCode based; cached CACHE_TTL s; fail-safe -> cached/zeros."""
     flows = {a: 0.0 for a in agents}
-    trades = {a: 0 for a in agents}
+    trades = {a: 0 for a in agents}      # cumulative swaps since go-live (displayed)
+    today = {a: 0 for a in agents}       # swaps in the current UTC day (>=1 -> scoring gate)
     if not RPC or not agents:
-        return flows, trades
+        return flows, trades, today
     cached = _cache_get("activity")
     if cached is not None:
-        f, t = cached.get("flows", {}), cached.get("trades", {})
-        return ({a: float(f.get(a, 0.0)) for a in agents}, {a: int(t.get(a, 0)) for a in agents})
+        f, t, d = cached.get("flows", {}), cached.get("trades", {}), cached.get("today", {})
+        return ({a: float(f.get(a, 0.0)) for a in agents},
+                {a: int(t.get(a, 0)) for a in agents},
+                {a: int(d.get(a, 0)) for a in agents})
     try:
         latest = int(rpc("eth_blockNumber", []), 16)
         if golive_block >= latest:
-            return flows, trades
+            return flows, trades, today
         addr_sym = {a.lower(): s for s, a in tokens.items()}
         token_addrs = list({a for a in tokens.values()})
         agent_set = set(a.lower() for a in agents)
@@ -439,6 +442,7 @@ def scan_activity(agents, golive_block, day_start_block, tokens, prices, decimal
         for c, r in zip(cps, codes):
             is_contract[c] = r not in (None, "0x", "0x0", "")
         traded_tx = {}
+        traded_all = {}
         for frm, to, l, blk in rows:
             if to in agent_set and frm not in agent_set:
                 agent, cp, inbound = to, frm, True
@@ -447,8 +451,9 @@ def scan_activity(agents, golive_block, day_start_block, tokens, prices, decimal
             else:
                 continue                            # agent<->agent: skip
             if is_contract.get(cp):                 # DEX leg -> a trade
+                traded_all.setdefault(agent, set()).add(l.get("transactionHash"))   # cumulative
                 if blk >= day_start_block:
-                    traded_tx.setdefault(agent, set()).add(l.get("transactionHash"))
+                    traded_tx.setdefault(agent, set()).add(l.get("transactionHash"))  # today (gate)
                 continue
             sym = addr_sym.get(l.get("address", "").lower())          # EOA leg -> capital flow
             price = float(prices.get(sym, 0) or 0) if sym else 0
@@ -461,17 +466,18 @@ def scan_activity(agents, golive_block, day_start_block, tokens, prices, decimal
             if usd > 0:
                 flows[agent] = flows.get(agent, 0.0) + (usd if inbound else -usd)
         flows = {a: round(flows.get(a, 0.0), 2) for a in agents}
-        trades = {a: len(traded_tx.get(a, ())) for a in agents}
+        trades = {a: len(traded_all.get(a, ())) for a in agents}   # cumulative since go-live
+        today = {a: len(traded_tx.get(a, ())) for a in agents}     # this UTC day (scoring gate)
         json.dump(flows, open(FLOWS_F, "w"))
-        _cache_put("activity", {"flows": flows, "trades": trades})
-        return flows, trades
+        _cache_put("activity", {"flows": flows, "trades": trades, "today": today})
+        return flows, trades, today
     except Exception as ex:
         print("activity scan failed (using cache/zero):", ex)
         try:
             cached = json.load(open(FLOWS_F))
-            return ({a: float(cached.get(a, 0.0)) for a in agents}, {a: 0 for a in agents})
+            return ({a: float(cached.get(a, 0.0)) for a in agents}, {a: 0 for a in agents}, {a: 0 for a in agents})
         except Exception:
-            return ({a: 0.0 for a in agents}, {a: 0 for a in agents})
+            return ({a: 0.0 for a in agents}, {a: 0 for a in agents}, {a: 0 for a in agents})
 
 
 def block_at_ts(target_ts):
@@ -559,6 +565,7 @@ def main():
     # ---- one on-chain pass: net deposits (capital base) + who traded today ----
     flows = {a: 0.0 for a in agents}
     swaps = {a: 0 for a in agents}
+    traded_today = {a: 0 for a in agents}
     try:
         gj = json.load(open(GOLIVE_F)); gl = gj.get("block"); gl_ts = gj.get("ts")
     except Exception:
@@ -573,7 +580,7 @@ def main():
             dsb = block_at_ts(day0)
         except Exception:
             dsb = gl
-        flows, swaps = scan_activity(agents, gl, dsb, tokens, prices, decimals)
+        flows, swaps, traded_today = scan_activity(agents, gl, dsb, tokens, prices, decimals)
 
     # Cap funded_credit at the actually-DETECTED inflow. The credit only exists to undo a
     # double-count (funding counted as BOTH baseline and deposit). If the funding came via a
@@ -681,7 +688,7 @@ def main():
         for n in range(1, HACK_DAYS + 1):
             win["d%d" % n] = dayret_n(s, n, b_eff)
         rows.append({"agent": a, "value": v, "base": round(b_eff, 2), "dep": round(cap_in - cap_out, 2),
-                     "trades": swaps.get(a, 0), "traded": swaps.get(a, 0) >= 1,
+                     "trades": swaps.get(a, 0), "traded": traded_today.get(a, 0) >= 1,
                      "ret_pct": allret, "dd_pct": drawdown(a),
                      "holds": holds.get(a, []), "win": win})
     if baseline:   # live: active traders first (>=1 swap today), then by return; ties neutral
