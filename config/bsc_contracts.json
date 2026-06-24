@@ -1006,5 +1006,12 @@
 "priceUsd": 0.0,
 "ambiguous": true,
 "stable": false
+},
+"H": {
+"address": "0x44F161aE29361E332dEA039DFA2F404E0bC5B5Cc",
+"decimals": 18,
+"priceUsd": 9.058e-07,
+"ambiguous": false,
+"stable": false
 }
 }

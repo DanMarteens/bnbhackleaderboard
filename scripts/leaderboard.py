@@ -50,6 +50,7 @@ GO_LIVE_TS = 1782086400        # 2026-06-22 00:00:00 UTC
 HACK_DAYS = 7
 DEX_MIN_LIQUIDITY = float(os.environ.get("DEX_MIN_LIQUIDITY", "25000"))
 DEX_DEVIATION = float(os.environ.get("DEX_DEVIATION", "0.20"))
+DEX_FORCE_SYMBOLS = {"H"}  # CMC H quote maps badly versus this BSC Humanity pool; use on-chain mark.
 SIM_COST_BPS = float(os.environ.get("SIM_COST_BPS", "0"))
 PRICE_OVERRIDES = {}
 
@@ -128,7 +129,9 @@ def apply_dex_guard(prices, dex):
     for s, q in dex.items():
         dp, liq = q.get("price", 0), q.get("liquidity", 0)
         cp = float(prices.get(s, 0) or 0)
-        if s in STABLES or dp <= 0 or liq < DEX_MIN_LIQUIDITY:
+        if s in STABLES or dp <= 0:
+            continue
+        if s not in DEX_FORCE_SYMBOLS and liq < DEX_MIN_LIQUIDITY:
             continue
         deviation = abs(dp / cp - 1) if cp > 0 else 1.0
         if cp <= 0 or deviation > DEX_DEVIATION:
