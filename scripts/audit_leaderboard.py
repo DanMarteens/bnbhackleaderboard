@@ -18,6 +18,7 @@ def main():
     participants = [a.lower() for a in load("participants.json")]
     baseline = load("lb_baseline.json")
     cost = load("flows_costbasis.json")
+    flows = load("flows.json")
     timeline = load("flows_timeline.json")
     rows = board.get("rows", [])
     errors, warnings = [], []
@@ -36,6 +37,11 @@ def main():
     for r in rows:
         a = r["agent"].lower()
         dep, wd = cost.get(a, (0.0, 0.0))
+        net_flow = float(flows.get(a, 0.0) or 0.0)
+        if net_flow > float(dep) + 1.0:
+            dep = net_flow
+        elif -net_flow > float(wd) + 1.0:
+            wd = -net_flow
         capital = float(baseline.get(a, 0.0) or 0.0) + float(dep)
         expected = None
         if capital > 0.1:

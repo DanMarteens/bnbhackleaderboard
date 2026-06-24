@@ -937,6 +937,17 @@ def main():
             dep, wd = max(net_flow, 0.0), max(-net_flow, 0.0)
         else:
             dep, wd = costflow[a]
+            # Safety net for stale/partial cost-basis refreshes. The light activity
+            # scan independently classifies one-sided eligible-token txs from
+            # eth_getLogs. It is priced with current marks, not tx-time marks, so it
+            # is less precise than cost-basis accounting. But if it sees materially
+            # more net external capital than the stored cost-basis row, never let the
+            # stale lower denominator turn funded tokens into leaderboard PnL.
+            net_flow = flows.get(a, 0.0)
+            if net_flow > dep + 1.0:
+                dep = net_flow
+            elif -net_flow > wd + 1.0:
+                wd = -net_flow
         allret, b_eff, sim_cost = capital_return(
             v, baseline.get(a), dep, wd, turnover.get(a, 0.0), SIM_COST_BPS)
         is_elig = b_eff > MINCAP                           # late funding is valid capital, not profit
