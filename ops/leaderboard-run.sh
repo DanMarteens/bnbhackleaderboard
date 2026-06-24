@@ -9,6 +9,8 @@ set +a
 PY=/opt/cmc-twak-agent/.venv/bin/python
 LOG=logs/lb.log
 MIN_AGENTS=123
+COSTBASIS_STAMP=dashboard/.last_costbasis_attempt
+COSTBASIS_TTL=${FLOWS_COSTBASIS_TTL:-600}
 
 # Never let two minute-loop iterations mutate history or deploy concurrently.
 exec 9>/run/leaderboard.lock
@@ -17,7 +19,14 @@ flock -n 9 || exit 0
 # Registry scan is intentionally disabled: the competition registration set is frozen
 # enough for live operations, and avoiding archive-wide scans preserves NodeReal quota.
 # Add exceptional late/manual agents to dashboard/extra_participants.json instead.
-"$PY" scripts/flows_costbasis.py >>"$LOG" 2>&1
+now=$(date +%s)
+last_costbasis=0
+[ -f "$COSTBASIS_STAMP" ] && last_costbasis=$(cat "$COSTBASIS_STAMP" 2>/dev/null || echo 0)
+if [ $((now - last_costbasis)) -ge "$COSTBASIS_TTL" ]; then
+  date +%s >"$COSTBASIS_STAMP"
+  timeout 240 "$PY" scripts/flows_costbasis.py >>"$LOG" 2>&1 || \
+    echo "$(date -u -Is) flows_costbasis failed; continuing with stale cost basis" >>"$LOG"
+fi
 "$PY" scripts/leaderboard.py >>"$LOG" 2>&1
 "$PY" scripts/audit_leaderboard.py >>"$LOG" 2>&1
 

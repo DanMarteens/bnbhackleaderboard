@@ -36,7 +36,7 @@ OUT_F = os.path.join(ROOT, "dashboard", "flows_costbasis.json")
 TIMELINE_F = os.path.join(ROOT, "dashboard", "flows_timeline.json")
 GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")
 PART_F = os.path.join(ROOT, "dashboard", "participants.json")
-REFRESH_S = int(os.environ.get("FLOWS_COSTBASIS_TTL", "1800"))
+REFRESH_S = int(os.environ.get("FLOWS_COSTBASIS_TTL", "600"))
 RPC = os.environ.get("ARCHIVE_RPC", "")
 
 

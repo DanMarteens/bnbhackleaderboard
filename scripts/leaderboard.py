@@ -188,7 +188,7 @@ def load_tokens():
     return tokens, prices, decimals
 
 
-CACHE_TTL = int(os.environ.get("LB_CACHE_TTL", "1800"))  # 30 min -> a 60s loop reuses the
+CACHE_TTL = int(os.environ.get("LB_CACHE_TTL", "600"))   # 10 min -> a 10m loop reuses the
 # expensive results (CMC quotes, getLogs flow/trade scans) instead of refetching every tick.
 # Re-valuation (Multicall3, keyless) still happens every run, so values stay fresh.
 
