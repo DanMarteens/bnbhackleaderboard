@@ -37,6 +37,7 @@ OUT_F = os.path.join(ROOT, "dashboard", "leaderboard.json")
 HIST_F = os.path.join(ROOT, "dashboard", "history.json")
 GOLIVE_F = os.path.join(ROOT, "dashboard", "golive.json")   # {"block","ts"} captured at baseline
 FLOWS_F = os.path.join(ROOT, "dashboard", "flows.json")     # last good {agent: net deposit USD}
+FLOWS_GROSS_F = os.path.join(ROOT, "dashboard", "flows_gross.json")  # {agent:[gross deposits, gross withdrawals]}
 BNB_DEP_F = os.path.join(ROOT, "dashboard", "bnb_deposits.json")  # (legacy) native-BNB deposits
 FLOWS_CB_F = os.path.join(ROOT, "dashboard", "flows_costbasis.json")  # cost-basis flows {agent:[dep,wd]}
 FLOWS_TIMELINE_F = os.path.join(ROOT, "dashboard", "flows_timeline.json")
@@ -471,6 +472,8 @@ def value_agents(agents, tokens, prices, decimals, block="latest"):
 def classify_transactions(agents, by_agent_tx, addr_sym, prices, decimals, day_start_blocks):
     """Pure scoring classifier used by the live scan and regression tests."""
     flows = {a: 0.0 for a in agents}
+    flow_dep = {a: 0.0 for a in agents}
+    flow_wd = {a: 0.0 for a in agents}
     trades = {a: 0 for a in agents}
     daily = {a: [0] * len(day_start_blocks) for a in agents}
     first_funding_day = {a: None for a in agents}
@@ -505,13 +508,17 @@ def classify_transactions(agents, by_agent_tx, addr_sym, prices, decimals, day_s
                     daily[agent][di] += 1
             elif rec["in"]:
                 flows[agent] += vin
+                flow_dep[agent] += vin
                 if di is not None and first_funding_day[agent] is None:
                     first_funding_day[agent] = di
             elif rec["out"]:
                 flows[agent] -= vout
+                flow_wd[agent] += vout
     flows = {a: round(flows.get(a, 0.0), 2) for a in agents}
+    flow_dep = {a: round(flow_dep.get(a, 0.0), 2) for a in agents}
+    flow_wd = {a: round(flow_wd.get(a, 0.0), 2) for a in agents}
     turnover = {a: round(turnover.get(a, 0.0), 2) for a in agents}
-    return flows, trades, daily, first_funding_day, turnover
+    return flows, flow_dep, flow_wd, trades, daily, first_funding_day, turnover
 
 
 def daily_qualification(baseline, counts):
@@ -552,18 +559,23 @@ def scan_activity(agents, golive_block, day_start_blocks, tokens, prices, decima
     first funding day, and eligible-swap turnover in USD.
     """
     flows = {a: 0.0 for a in agents}
+    flow_dep = {a: 0.0 for a in agents}
+    flow_wd = {a: 0.0 for a in agents}
     trades = {a: 0 for a in agents}      # cumulative swaps since go-live (displayed)
     today = {a: 0 for a in agents}       # swaps in the current UTC day (>=1 -> scoring gate)
     daily = {a: [0] * len(day_start_blocks) for a in agents}
     first_funding_day = {a: None for a in agents}
     turnover = {a: 0.0 for a in agents}
     if not RPC or not agents:
-        return flows, trades, today, daily, first_funding_day, turnover
-    cached = _cache_get("activity_v2")
+        return flows, flow_dep, flow_wd, trades, today, daily, first_funding_day, turnover
+    cached = _cache_get("activity_v3")
     if cached is not None:
         f, t, d = cached.get("flows", {}), cached.get("trades", {}), cached.get("today", {})
+        fd, fw = cached.get("flow_dep", {}), cached.get("flow_wd", {})
         dy, ff, tv = cached.get("daily", {}), cached.get("first_funding_day", {}), cached.get("turnover", {})
         return ({a: float(f.get(a, 0.0)) for a in agents},
+                {a: float(fd.get(a, 0.0)) for a in agents},
+                {a: float(fw.get(a, 0.0)) for a in agents},
                 {a: int(t.get(a, 0)) for a in agents},
                 {a: int(d.get(a, 0)) for a in agents},
                 {a: list(dy.get(a, [0] * len(day_start_blocks))) for a in agents},
@@ -572,7 +584,7 @@ def scan_activity(agents, golive_block, day_start_blocks, tokens, prices, decima
     try:
         latest = int(rpc("eth_blockNumber", []), 16)
         if golive_block >= latest:
-            return flows, trades, today, daily, first_funding_day, turnover
+            return flows, flow_dep, flow_wd, trades, today, daily, first_funding_day, turnover
         addr_sym = {a.lower(): s for s, a in tokens.items()}
         token_addrs = list({a for a in tokens.values()})
         agent_set = set(a.lower() for a in agents)
@@ -623,22 +635,30 @@ def scan_activity(agents, golive_block, day_start_blocks, tokens, prices, decima
                 rec = by_agent_tx.setdefault(frm, {}).setdefault(txh, {"in": [], "out": [], "block": blk})
                 rec["out"].append(l)
 
-        flows, trades, daily, first_funding_day, turnover = classify_transactions(
+        flows, flow_dep, flow_wd, trades, daily, first_funding_day, turnover = classify_transactions(
             agents, by_agent_tx, addr_sym, prices, decimals, day_start_blocks)
         today = {a: (daily[a][-1] if daily[a] else 0) for a in agents}
         json.dump(flows, open(FLOWS_F, "w"))
-        _cache_put("activity_v2", {"flows": flows, "trades": trades, "today": today,
+        json.dump({a: [flow_dep.get(a, 0.0), flow_wd.get(a, 0.0)] for a in agents},
+                  open(FLOWS_GROSS_F, "w"))
+        _cache_put("activity_v3", {"flows": flows, "flow_dep": flow_dep, "flow_wd": flow_wd,
+                                   "trades": trades, "today": today,
                                    "daily": daily, "first_funding_day": first_funding_day,
                                    "turnover": turnover})
-        return flows, trades, today, daily, first_funding_day, turnover
+        return flows, flow_dep, flow_wd, trades, today, daily, first_funding_day, turnover
     except Exception as ex:
         print("activity scan failed (using cache/zero):", ex)
         try:
             cached = json.load(open(FLOWS_F))
-            return ({a: float(cached.get(a, 0.0)) for a in agents}, {a: 0 for a in agents},
+            gross = json.load(open(FLOWS_GROSS_F))
+            return ({a: float(cached.get(a, 0.0)) for a in agents},
+                    {a: float((gross.get(a) or [0.0, 0.0])[0]) for a in agents},
+                    {a: float((gross.get(a) or [0.0, 0.0])[1]) for a in agents},
+                    {a: 0 for a in agents},
                     {a: 0 for a in agents}, daily, first_funding_day, turnover)
         except Exception:
-            return ({a: 0.0 for a in agents}, {a: 0 for a in agents},
+            return ({a: 0.0 for a in agents}, {a: 0.0 for a in agents}, {a: 0.0 for a in agents},
+                    {a: 0 for a in agents},
                     {a: 0 for a in agents}, daily, first_funding_day, turnover)
 
 
@@ -742,6 +762,8 @@ def main():
 
     # ---- one on-chain pass: net deposits (capital base) + who traded today ----
     flows = {a: 0.0 for a in agents}
+    flow_dep = {a: 0.0 for a in agents}
+    flow_wd = {a: 0.0 for a in agents}
     swaps = {a: 0 for a in agents}
     traded_today = {a: 0 for a in agents}
     daily_swaps = {a: [] for a in agents}
@@ -759,7 +781,7 @@ def main():
                 day_starts.append(cached_block_at_ts((gl_ts or GO_LIVE_TS) + i * 86400))
             except Exception:
                 day_starts.append(gl if i == 0 else day_starts[-1])
-        (flows, swaps, traded_today, daily_swaps,
+        (flows, flow_dep, flow_wd, swaps, traded_today, daily_swaps,
          first_funding_day, turnover) = scan_activity(
             agents, gl, day_starts, tokens, prices, decimals)
 
@@ -933,21 +955,18 @@ def main():
         # conservative for ranking and prevents deposits from appearing as profit.
         costbasis_missing = a not in costflow
         if costbasis_missing:
-            net_flow = flows.get(a, 0.0)
-            dep, wd = max(net_flow, 0.0), max(-net_flow, 0.0)
+            dep = flow_dep.get(a, max(flows.get(a, 0.0), 0.0))
+            wd = flow_wd.get(a, max(-flows.get(a, 0.0), 0.0))
         else:
             dep, wd = costflow[a]
             # Safety net for stale/partial cost-basis refreshes. The light activity
             # scan independently classifies one-sided eligible-token txs from
             # eth_getLogs. It is priced with current marks, not tx-time marks, so it
             # is less precise than cost-basis accounting. But if it sees materially
-            # more net external capital than the stored cost-basis row, never let the
-            # stale lower denominator turn funded tokens into leaderboard PnL.
-            net_flow = flows.get(a, 0.0)
-            if net_flow > dep + 1.0:
-                dep = net_flow
-            elif -net_flow > wd + 1.0:
-                wd = -net_flow
+            # more gross external flow than the stored cost-basis row, never let stale
+            # deposits or withdrawals turn funded tokens/cash-outs into leaderboard PnL.
+            dep = max(float(dep), float(flow_dep.get(a, 0.0) or 0.0))
+            wd = max(float(wd), float(flow_wd.get(a, 0.0) or 0.0))
         allret, b_eff, sim_cost = capital_return(
             v, baseline.get(a), dep, wd, turnover.get(a, 0.0), SIM_COST_BPS)
         is_elig = b_eff > MINCAP                           # late funding is valid capital, not profit

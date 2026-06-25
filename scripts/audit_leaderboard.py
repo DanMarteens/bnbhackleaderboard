@@ -19,6 +19,7 @@ def main():
     baseline = load("lb_baseline.json")
     cost = load("flows_costbasis.json")
     flows = load("flows.json")
+    gross = load("flows_gross.json")
     timeline = load("flows_timeline.json")
     rows = board.get("rows", [])
     errors, warnings = [], []
@@ -37,6 +38,9 @@ def main():
     for r in rows:
         a = r["agent"].lower()
         dep, wd = cost.get(a, (0.0, 0.0))
+        gross_dep, gross_wd = gross.get(a, (0.0, 0.0))
+        dep = max(float(dep), float(gross_dep or 0.0))
+        wd = max(float(wd), float(gross_wd or 0.0))
         net_flow = float(flows.get(a, 0.0) or 0.0)
         if net_flow > float(dep) + 1.0:
             dep = net_flow
