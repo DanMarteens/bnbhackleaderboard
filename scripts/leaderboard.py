@@ -1035,7 +1035,7 @@ def main():
     json.dump(out, open(OUT_F, "w"))
 
     print(f"participants {len(agents)} | baseline {has_base} | funded {stats['funded']} | deployed ${stats['deployed']}")
-    for r in rows[:8]:
+    for r in [r for r in rows if r.get("rank") is not None][:8]:
         print(f"  #{r['rank']:>2} {r['agent']} ${r['value']} ret={r['ret_pct']} trades={r['trades']} dd={r['dd_pct']}")
 
 
