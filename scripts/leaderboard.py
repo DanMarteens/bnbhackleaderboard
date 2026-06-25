@@ -522,14 +522,13 @@ def classify_transactions(agents, by_agent_tx, addr_sym, prices, decimals, day_s
 
 
 def daily_qualification(baseline, counts):
-    """Return (qualified, missing days), allowing a zero-start wallet to enter late.
+    """Return (qualified, missing days) for active UTC competition days.
 
-    Capital present at go-live owes every competition day. A zero-start wallet begins
-    its daily obligation on its first strict eligible swap day; merely funding earlier
-    must not create a retroactive missed-day penalty.
+    A ranked wallet must have at least one strict eligible-token swap on every
+    already-active UTC competition day. Funding can enter late, but it does not
+    waive the daily swap gate for ranking.
     """
-    start_day = 0 if baseline > MINCAP else next((i for i, n in enumerate(counts) if n > 0), None)
-    required = list(range(start_day, len(counts))) if start_day is not None else []
+    required = list(range(len(counts))) if counts else []
     missing = [i + 1 for i in required if counts[i] < 1]
     return bool(required) and not missing, missing
 
@@ -1030,7 +1029,7 @@ def main():
     out = {"generated_ts": now, "n": len(agents), "has_baseline": has_base,
            "stats": stats, "rows": rows,
            "method": {"trade": "eligible-in-and-out-same-tx",
-                      "daily_gate": "go-live-funded-or-first-strict-trade-day",
+                      "daily_gate": "one-strict-eligible-swap-per-active-utc-day",
                       "price": "CMC with liquid-BSC-DEX deviation guard",
                       "sim_cost_bps": SIM_COST_BPS, "price_overrides": PRICE_OVERRIDES}}
     json.dump(out, open(OUT_F, "w"))
