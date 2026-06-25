@@ -31,7 +31,7 @@ background:
  radial-gradient(840px 620px at 93% 3%,rgba(56,97,251,.12),transparent 55%),
  radial-gradient(760px 760px at 50% 120%,rgba(63,208,224,.07),transparent 60%),
  var(--bg);background-attachment:fixed;padding:30px 16px 64px}
-.wrap{max-width:980px;margin:0 auto}
+.wrap{max-width:1180px;margin:0 auto}
 .glass{background:var(--glass);backdrop-filter:blur(24px) saturate(155%);-webkit-backdrop-filter:blur(24px) saturate(155%);
  border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.06)}
 .hero{margin:0 0 22px}
@@ -77,8 +77,9 @@ background:
 .sel:focus{border-color:rgba(56,97,251,.6);box-shadow:0 0 0 3px rgba(56,97,251,.13)}
 .sel option{background:#0d1430;color:var(--txt)}
 .tbl{overflow:hidden;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:22px;backdrop-filter:blur(24px);box-shadow:0 18px 60px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.06)}
-.thead,.row{display:grid;grid-template-columns:46px 1.55fr 112px 116px 128px 130px;align-items:center;gap:11px;padding:14px 18px}
-.pnlcol{font-weight:800;font-size:15.5px}.thead .pnlcol{font-weight:700;font-size:10.5px}
+.thead,.row{display:grid;grid-template-columns:46px minmax(270px,1.55fr) 116px 116px minmax(190px,220px) 104px;align-items:center;gap:11px;padding:14px 18px}
+.thead>*,.row>*{min-width:0}
+.pnlcol{font-weight:800;font-size:15.5px;white-space:nowrap}.thead .pnlcol{font-weight:700;font-size:10.5px}
 .thead{border-bottom:1px solid var(--line);font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
 .thead span{cursor:pointer;transition:.15s}.thead span:hover{color:var(--gold2)}
 .thead .num,.row .num{text-align:right}
@@ -110,9 +111,9 @@ background:
 .dqcell{display:flex;align-items:center;gap:8px}
 .dqwrap{height:6px;flex:1;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden}
 .dqv{font:600 11px/1 var(--mono);color:var(--mut);width:36px;text-align:right}
-.tradebox{display:flex;align-items:baseline;justify-content:flex-end;gap:7px}
+.tradebox{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;justify-content:flex-end;gap:7px;min-width:0;width:100%}
 .tradebox .tot{font:800 13px/1 var(--mono)}
-.days{font:700 10px/1 var(--mono);color:var(--mut);white-space:nowrap}
+.days{font:700 10px/1 var(--mono);color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .days .miss{color:var(--r)}
 .days .future{color:rgba(133,144,173,.45)}
 .det{max-height:0;overflow:hidden;transition:max-height .3s ease}.det.open{max-height:200px}
@@ -134,7 +135,7 @@ background:
  .pnlcol,.trcol,.ddcol{display:inline-flex!important;align-items:center;gap:7px;justify-content:flex-start;text-align:left;font-size:12px;color:var(--txt)}
  .pnlcol::before{content:"PNL";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}.trcol::before{content:"TRADES";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}
  .ddcol::before{content:"DD";color:var(--mut);font:700 9px/1 var(--mono);letter-spacing:.1em}.dqv{text-align:left;width:auto}.det.open{max-height:260px}
- .tradebox{justify-content:flex-start}.days{font-size:9.5px}
+ .tradebox{display:flex;justify-content:flex-start;max-width:100%}.days{font-size:9.5px}
  .dethold{padding:0 12px 13px 50px}.chip{font-size:10px;padding:5px 9px}}
 </style></head><body><div class="wrap">
 <div class="hero">
